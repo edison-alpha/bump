@@ -22,7 +22,7 @@ export function HomeScreen() {
   const { balance, position } = useTrade();
   const markets = useMarkets();
   const name = session.name || "there";
-  usePrimaryAction(position ? { label: "View live position", href: "/position" } : { label: "Start trading", href: "/markets" });
+  usePrimaryAction(position ? { label: "Check my trade", href: "/position" } : { label: "Make a call", href: "/markets" });
 
   return (
     <Screen
@@ -57,7 +57,7 @@ export function HomeScreen() {
       </div>
 
       <Button href={position ? "/position" : "/markets"} size="lg" trailing={<Icon name="next" size={24} />}>
-        {position ? "View live position" : "Start trading"}
+        {position ? "Check my trade" : "Make a call"}
       </Button>
 
       <div className="flex flex-col gap-1.5">
@@ -69,8 +69,8 @@ export function HomeScreen() {
       <LightCard className="flex items-center gap-2.5 py-1.5 pr-3 pl-1.5">
         <Mascot size={52} accessory="bulb" bob={false} />
         <div className="flex-1">
-          <p className="font-display text-[16px] leading-tight font-bold">How it works</p>
-          <p className="text-[12px] font-semibold text-bump-600">Learn the basics in 2 minutes.</p>
+          <p className="font-display text-[16px] leading-tight font-bold">New here?</p>
+          <p className="text-[12px] font-semibold text-bump-600">See how a trade works, step by step.</p>
         </div>
         <Icon name="chevron" size={22} />
       </LightCard>

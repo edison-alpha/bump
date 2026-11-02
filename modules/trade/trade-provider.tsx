@@ -6,7 +6,7 @@ import { newId } from "@/lib/id";
 import { sfx } from "@/lib/sound";
 import { useLocalStorageState } from "@/lib/use-local-storage-state";
 import { unrealizedPnl } from "./calc";
-import type { ClosedTrade, Draft, Position } from "./types";
+import type { CloseReason, ClosedTrade, Draft, Position } from "./types";
 
 const STARTING_BALANCE = 1000;
 
@@ -29,7 +29,7 @@ type TradeContextValue = TradeState & {
   openPosition: (entry: number) => void;
   updateLimits: (limits: Pick<Position, "targetPct" | "stopPct">) => void;
   /** Closes `percent` (1-100) of the open position at `exit`, returns the receipt. */
-  closePosition: (percent: number, exit: number) => ClosedTrade | null;
+  closePosition: (percent: number, exit: number, reason?: CloseReason) => ClosedTrade | null;
 };
 
 const TradeContext = createContext<TradeContextValue | null>(null);
@@ -63,7 +63,7 @@ export function TradeProvider({ children }: { children: ReactNode }) {
   );
 
   const closePosition = useCallback(
-    (percent: number, exit: number) => {
+    (percent: number, exit: number, reason: CloseReason = "manual") => {
       const position = state.position;
       if (!position) return null;
       const fraction = Math.min(percent, 100) / 100;
@@ -78,6 +78,7 @@ export function TradeProvider({ children }: { children: ReactNode }) {
         exit,
         pnl: unrealizedPnl({ ...position, margin: closedMargin }, position.entry, exit),
         closedAt: Date.now(),
+        reason,
       };
       sfx.close(receipt.pnl);
       setState((s) => ({

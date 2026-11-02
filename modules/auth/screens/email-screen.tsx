@@ -30,18 +30,18 @@ export function EmailScreen() {
     e.preventDefault();
     send();
   };
-  usePrimaryAction({ label: "Send sign-in code", onPress: send });
+  usePrimaryAction({ label: "Send my code", onPress: send });
 
   return (
-    <Screen title="Welcome back" back="/">
+    <Screen title="Sign in" back="/">
       <form onSubmit={submit} className="flex flex-1 flex-col gap-3" noValidate>
         <div className="flex justify-center">
           <Mascot size={124} accessory="mail" sparkles="left" />
         </div>
         <div className="text-center">
-          <h2 className="text-pop font-display text-[26px] leading-tight font-bold">Enter your email</h2>
+          <h2 className="text-pop font-display text-[26px] leading-tight font-bold">What’s your email?</h2>
           <p className="mx-auto mt-0.5 max-w-72 text-[14px] leading-snug text-white">
-            We’ll send you a one-time code to sign in to your account.
+            We’ll send you a 6-digit code. No password to remember.
           </p>
         </div>
 
@@ -57,13 +57,12 @@ export function EmailScreen() {
             onChange={(e) => setValue(e.target.value)}
             aria-invalid={touched && !valid}
           />
-          {touched && !valid && <p className="mt-1 px-1 text-sm text-coral">Enter a valid email address.</p>}
+          {touched && !valid && <p className="mt-1 px-1 text-sm text-coral">That email looks off. Check for typos?</p>}
         </div>
 
         <Button type="submit" size="lg" trailing={<Icon name="next" size={26} />}>
-          Send sign-in code
+          Send my code
         </Button>
-        <p className="-mt-1 text-center text-[13px] text-white/85">We’ll email you a one-time code.</p>
 
         <div className="flex items-center gap-4 text-[13px] text-white/80">
           <span className="h-px flex-1 bg-white/25" />

@@ -89,9 +89,9 @@ export function LeaderboardScreen() {
 
       {wins && you && !you.visible && (
         <p className="glass rounded-[14px] p-3 text-[14px] text-white/90">
-          You’re hidden from the leaderboard.{" "}
+          You’re hiding from the leaderboard.{" "}
           <Link href="/me" className="font-semibold text-cyan underline">
-            Turn on visibility
+            Show me
           </Link>
         </p>
       )}
@@ -100,19 +100,13 @@ export function LeaderboardScreen() {
         <LightCard className="flex items-center gap-2 py-2 pr-2.5 pl-1.5">
           <Mascot size={84} accessory="bulb" />
           <div>
-            <p className="font-display text-[16px] leading-tight font-bold">Learn from every trade.</p>
-            <p className="text-[12px] font-semibold text-navy-700">Use stop losses to manage risk.</p>
-            <Link
-              href="/home"
-              className="mt-1.5 inline-flex items-center gap-1.5 rounded-full border-2 border-bump-600 bg-white px-3 py-1 font-display text-[13px] font-semibold text-navy-900"
-            >
-              Explore stop-loss tips <Icon name="next" size={16} />
-            </Link>
+            <p className="font-display text-[16px] leading-tight font-bold">Ouch? It happens.</p>
+            <p className="text-[12px] font-semibold text-navy-700">A stop loss closes a bad call before it gets worse.</p>
           </div>
         </LightCard>
       )}
 
-      <p className="mt-auto text-center text-[12px] text-white/90">Only opted-in public profiles.</p>
+      <p className="mt-auto text-center text-[12px] text-white/90">Only players who opted in show up here.</p>
     </Screen>
   );
 }

@@ -35,12 +35,12 @@ export function ClosePositionScreen() {
   };
   usePrimaryAction(position ? { label: `Close ${percent}%`, onPress: confirm } : null);
 
-  if (!position) return <Screen title="Close Position">{null}</Screen>;
+  if (!position) return <Screen title="Close trade">{null}</Screen>;
 
   const grossProfit = round2(unrealizedPnl(position, position.entry, market.price) * (percent / 100));
 
   return (
-    <Screen title="Close Position">
+    <Screen title="Close trade">
       <div className="flex items-center gap-2.5">
         <CoinIcon symbol={market.symbol} size={40} />
         <span className="text-pop font-display text-[24px] font-bold">{market.name}</span>
@@ -106,10 +106,10 @@ export function ClosePositionScreen() {
 
       <div className="mt-auto flex flex-col gap-2">
         <Button variant="danger" size="lg" className="rounded-[18px] text-[20px]" onClick={confirm}>
-          Close trade
+          Close it
         </Button>
         <Button variant="light" size="lg" className="rounded-[18px] text-[20px] font-bold" onClick={() => router.back()}>
-          Keep open
+          Keep it running
         </Button>
       </div>
     </Screen>

@@ -13,7 +13,9 @@ export function TradeHistoryItem({ trade }: { trade: ClosedTrade }) {
       <div className="min-w-0 flex-1">
         <p className="font-display text-[15px] leading-tight font-semibold">
           {symbol}
-          <span className="ml-3 font-sans text-[13px] font-semibold">Closed</span>
+          <span className="ml-3 font-sans text-[13px] font-semibold">
+            {trade.reason === "target" ? "Target hit" : trade.reason === "stop" ? "Stopped out" : "Closed"}
+          </span>
         </p>
         <p className="text-[12px] text-white/85">
           {trade.side === "long" ? "Long" : "Short"} · {trade.leverage}x · {shortDate(trade.closedAt)}

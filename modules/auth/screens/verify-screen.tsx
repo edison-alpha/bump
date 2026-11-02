@@ -32,7 +32,7 @@ export function VerifyScreen() {
     signIn();
     router.push(session.username ? "/home" : "/profile-setup");
   };
-  usePrimaryAction({ label: "Verify and continue", onPress: verify, disabled: code.length !== CODE_LENGTH });
+  usePrimaryAction({ label: "Let me in", onPress: verify, disabled: code.length !== CODE_LENGTH });
 
   return (
     <Screen title="Check your inbox" back="/sign-in">
@@ -40,30 +40,30 @@ export function VerifyScreen() {
         <Mascot size={124} accessory="mail" sparkles="right" />
       </div>
       <div className="text-center">
-        <h2 className="text-pop font-display text-[24px] leading-tight font-bold">Enter the 6-digit code</h2>
-        <p className="mt-0.5 text-[14px] text-white">We sent a code to</p>
+        <h2 className="text-pop font-display text-[24px] leading-tight font-bold">Type in your code</h2>
+        <p className="mt-0.5 text-[14px] text-white">We sent 6 digits to</p>
         <p className="font-display text-[15px] font-bold">{session.email ? maskEmail(session.email) : "your email"}</p>
       </div>
 
       <OtpInput value={code} onChange={setCode} length={CODE_LENGTH} />
 
       <Button size="lg" disabled={code.length !== CODE_LENGTH} onClick={verify} trailing={<Icon name="next" size={26} />}>
-        Verify and continue
+        Let me in
       </Button>
 
       <div className="mt-1 flex items-center gap-4 text-[13px] text-white/85">
         <span className="h-px flex-1 bg-white/25" />
         {seconds > 0 ? (
-          <span>Resend code ({seconds}s)</span>
+          <span>New code in {seconds}s</span>
         ) : (
           <button type="button" className="font-semibold text-cyan" onClick={() => setSeconds(RESEND_SECONDS)}>
-            Resend code
+            Send a new code
           </button>
         )}
         <span className="h-px flex-1 bg-white/25" />
       </div>
       <Link href="/sign-in" className="mx-auto text-[13px] text-white underline underline-offset-4">
-        Change email
+        Use a different email
       </Link>
     </Screen>
   );

@@ -12,7 +12,7 @@ const sans = Nunito({ subsets: ["latin"], variable: "--font-nunito", display: "s
 
 export const metadata: Metadata = {
   title: { default: "bump", template: "%s · bump" },
-  description: "Practice trading with paper funds. Markets, made playful.",
+  description: "Up or down? Practice trading crypto with play money on a pocket-sized console.",
   applicationName: "bump",
   appleWebApp: { capable: true, title: "bump", statusBarStyle: "black-translucent" },
   icons: { icon: "/icons/icon-192.png", apple: "/icons/apple-touch-icon.png" },

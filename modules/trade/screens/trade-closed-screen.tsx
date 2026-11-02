@@ -11,9 +11,16 @@ import { Card } from "@/components/ui/card";
 import { InfoTip } from "@/components/ui/info-tip";
 import { Mascot } from "@/components/ui/mascot";
 import { cn } from "@/lib/cn";
-import { signedUsd, usd } from "@/lib/format";
+import { signedUsd, usdPrice } from "@/lib/format";
+import type { CloseReason } from "../types";
 import { TradeHistoryItem } from "../components/trade-history-item";
 import { useTrade } from "../trade-provider";
+
+const OUTCOME: Record<CloseReason, { title: string; body: string }> = {
+  manual: { title: "That’s a wrap!", body: "You closed it. Here’s how your call played out." },
+  target: { title: "Target hit!", body: "Price reached your profit target, so we closed the trade for you." },
+  stop: { title: "Stopped out", body: "Price touched your stop loss, so we closed it before it got worse." },
+};
 
 export function TradeClosedScreen() {
   const router = useRouter();
@@ -25,16 +32,17 @@ export function TradeClosedScreen() {
 
   usePrimaryAction({ label: "Back home", href: "/home" });
 
-  if (!lastClosed) return <Screen title="Trade Closed">{null}</Screen>;
+  if (!lastClosed) return <Screen title="Trade closed">{null}</Screen>;
   const tone = lastClosed.pnl >= 0 ? "text-mint" : "text-coral";
+  const copy = OUTCOME[lastClosed.reason ?? "manual"];
 
   return (
-    <Screen title="Trade Closed" back="/home">
+    <Screen title="Trade closed" back="/home">
       <div className="flex items-center gap-3">
         <Mascot size={96} accessory="check" sparkles="left" className="ml-5" />
         <div>
-          <h2 className="text-pop font-display text-[28px] leading-tight font-bold">Trade closed</h2>
-          <p className="text-[13px] leading-snug text-white">Your practice trade has been closed.</p>
+          <h2 className="text-pop font-display text-[28px] leading-tight font-bold">{copy.title}</h2>
+          <p className="text-[13px] leading-snug text-white">{copy.body}</p>
         </div>
       </div>
 
@@ -48,15 +56,15 @@ export function TradeClosedScreen() {
         <div className="mt-2 grid grid-cols-2 border-t border-white/15 pt-1.5">
           <div className="border-r border-white/20">
             <p className="text-[12px]">Entry price</p>
-            <p className="font-display text-[17px] font-bold tabular-nums">{usd(lastClosed.entry)}</p>
+            <p className="font-display text-[17px] font-bold tabular-nums">{usdPrice(lastClosed.entry)}</p>
           </div>
           <div className="pl-3">
             <p className="text-[12px]">Exit price</p>
-            <p className="font-display text-[17px] font-bold tabular-nums">{usd(lastClosed.exit)}</p>
+            <p className="font-display text-[17px] font-bold tabular-nums">{usdPrice(lastClosed.exit)}</p>
           </div>
         </div>
         <Link href="/history" className="flex items-center justify-center gap-1 font-display text-[14px] font-semibold text-cyan">
-          View final settlement <Icon name="chevron" size={16} />
+          See it in your history <Icon name="chevron" size={16} />
         </Link>
       </Card>
 
@@ -76,7 +84,7 @@ export function TradeClosedScreen() {
 
       <div className="mt-auto grid grid-cols-2 gap-2">
         <Button variant="light" href="/history" className="font-bold">
-          View full history
+          All my trades
         </Button>
         <Button href="/home">Back home</Button>
       </div>

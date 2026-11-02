@@ -28,8 +28,8 @@ export function WelcomeScreen() {
         </header>
       }
     >
-      <h1 className="text-pop text-center font-display text-[32px] leading-[1.02] font-bold">Markets, made playful.</h1>
-      <p className="-mt-0.5 text-center text-[15px] text-white">Practice trading with paper funds.</p>
+      <h1 className="text-pop text-center font-display text-[32px] leading-[1.02] font-bold">Up or down? Make the call.</h1>
+      <p className="-mt-0.5 text-center text-[15px] text-white">Practice trading with play money. Only your pride is at stake.</p>
 
       <div className="relative -mx-3.5 flex min-h-40 flex-1 items-end justify-center">
         <Clouds tone="mixed" className="absolute inset-x-0 bottom-0 h-16" />
@@ -37,7 +37,7 @@ export function WelcomeScreen() {
         <Star className="absolute top-[52%] right-[24%]" />
         <TrendArrow className="absolute top-[38%] right-[8%]" />
         <SpeechBubble tail="bottom-left" className="absolute top-[4%] right-[6%] w-24 text-center text-[13px]">
-          Let’s get started!
+          Ready to play?
         </SpeechBubble>
         <Mascot size={170} className="relative mb-3" />
       </div>
@@ -69,7 +69,7 @@ export function WelcomeScreen() {
             router.push("/home");
           }}
         >
-          Try as a guest <Icon name="next" size={18} />
+          Play as a guest <Icon name="next" size={18} />
         </button>
       </div>
     </Screen>

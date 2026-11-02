@@ -48,10 +48,10 @@ export function BuildTradeScreen() {
   });
 
   return (
-    <Screen title="Build trade">
+    <Screen title="Plan your trade">
       <TradeHeader market={market} side={draft.side} leverage={draft.leverage} />
 
-      <h2 className="text-pop font-display text-[24px] leading-none font-bold">Set your plan.</h2>
+      <h2 className="text-pop font-display text-[24px] leading-none font-bold">Size it up.</h2>
 
       <DialField
         id="margin"
@@ -108,7 +108,7 @@ export function BuildTradeScreen() {
         <span className="flex items-center text-[15px]">
           Leverage
           <InfoTip text="Leverage multiplies your position size, and your gains and losses with it." />
-          <span className="ml-auto text-[12px] text-white/70">Magnifies gains and losses</span>
+          <span className="ml-auto text-[12px] text-white/70">Bigger wins, bigger losses</span>
         </span>
         <Segmented
           tone="group"

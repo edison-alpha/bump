@@ -44,7 +44,7 @@ export function ProfileSetupScreen() {
           <Avatar seed={name || "you"} size={92} ring badge={<Icon name="camera" size={18} />} />
         </div>
         <p className="text-center text-[14px] leading-snug text-white">
-          Add a profile so others can recognize you on the leaderboards.
+          Pick a name. It’s how other players spot you on the leaderboard.
         </p>
 
         <TextField
@@ -74,13 +74,13 @@ export function ProfileSetupScreen() {
         <div className="recess flex items-center gap-3 rounded-[14px] px-3.5 py-2">
           <Icon name="trophy" size={26} className="text-gold drop-shadow-[0_2px_0_rgba(0,0,0,0.3)]" />
           <span className="flex-1 font-display text-[14px] leading-tight font-semibold">
-            Show my profile
+            Show me on
             <br />
-            on leaderboards
+            the leaderboard
           </span>
-          <Toggle checked={visible} onChange={setVisible} label="Show my profile on leaderboards" />
+          <Toggle checked={visible} onChange={setVisible} label="Show me on the leaderboard" />
         </div>
-        <p className="-mt-1 text-center text-[13px] text-white/85">You can change this later.</p>
+        <p className="-mt-1 text-center text-[13px] text-white/85">You can switch this off anytime in Profile.</p>
 
         <Button type="submit" size="lg" className="mt-auto" disabled={!canSubmit} trailing={<Icon name="next" size={26} />}>
           Let’s go

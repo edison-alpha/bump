@@ -48,7 +48,7 @@ export function ProfileScreen() {
 
       <Card className="relative px-3 py-2">
         <p className="flex items-center text-[14px]">
-          Example balance
+          Practice balance
           <InfoTip text="Practice funds have no cash value." />
         </p>
         <p className="text-pop font-display text-[32px] leading-tight font-bold tabular-nums">{usd(balance)}</p>

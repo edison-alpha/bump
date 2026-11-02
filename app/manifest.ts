@@ -4,7 +4,7 @@ export default function manifest(): MetadataRoute.Manifest {
   return {
     name: "bump",
     short_name: "bump",
-    description: "Practice trading with paper funds. Markets, made playful.",
+    description: "Up or down? Practice trading crypto with play money on a pocket-sized console.",
     start_url: "/home",
     scope: "/",
     display: "standalone",

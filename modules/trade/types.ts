@@ -22,6 +22,9 @@ export type Position = {
   openedAt: number;
 };
 
+/** Why a trade closed: the player closed it, or the price touched the profit target / stop loss. */
+export type CloseReason = "manual" | "target" | "stop";
+
 export type ClosedTrade = {
   id: string;
   marketId: string;
@@ -33,4 +36,6 @@ export type ClosedTrade = {
   /** Gross profit, before funding and costs. */
   pnl: number;
   closedAt: number;
+  /** Missing on trades saved before limits closed trades automatically; read as "manual". */
+  reason?: CloseReason;
 };

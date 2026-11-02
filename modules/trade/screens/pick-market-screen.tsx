@@ -42,7 +42,7 @@ export function PickMarketScreen() {
   });
 
   return (
-    <Screen title="Pick your market">
+    <Screen title="Pick a coin">
       <label className="recess flex h-11 shrink-0 items-center gap-3 rounded-[12px] px-3.5 focus-within:border-cyan">
         <Icon name="search" size={22} className="text-white" />
         <input
@@ -66,9 +66,9 @@ export function PickMarketScreen() {
         <Clouds className="absolute inset-x-0 bottom-0 h-10" />
         <Mascot size={112} sparkles="left" className="relative" />
         <SpeechBubble className="relative">
-          Which way will it go?
+          Up or down?
           <br />
-          <span className="text-coral-deep">SELL</span> if down, <span className="text-mint-deep">BUY</span> if up.
+          <span className="text-mint-deep">BUY</span> if it climbs, <span className="text-coral-deep">SELL</span> if it drops.
         </SpeechBubble>
       </div>
     </Screen>

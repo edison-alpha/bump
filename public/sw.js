@@ -1,5 +1,5 @@
 /* bump service worker: offline shell. Static assets cache-first, pages network-first. */
-const VERSION = "bump-v2";
+const VERSION = "bump-v3";
 const PRECACHE = ["/", "/home", "/offline.html"];
 
 self.addEventListener("install", (event) => {

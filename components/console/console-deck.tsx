@@ -75,7 +75,7 @@ export function ConsoleDeck() {
   });
 
   return (
-    <div className="shrink-0 px-4 pt-0.5 pb-[max(0.375rem,calc(env(safe-area-inset-bottom)-14px))] in-data-short-viewport:pb-2">
+    <div className="shrink-0 px-4 pt-0.5 pb-[max(0.375rem,calc(env(safe-area-inset-bottom)-14px))] in-data-short-viewport:pb-0">
       <div className="flex items-stretch gap-3">
         <div className="flex flex-1 flex-col gap-2.5">
           {sides ? (
@@ -158,7 +158,9 @@ export function ConsoleDeck() {
         </div>
         <ScrollWheel />
       </div>
-      <PoweredBy tone="dark" className="mt-1 text-[11px]" />
+      {/* short iOS web view: the strip below is system-painted, so the deck sits flush on it with no padding of its own */}
+      <PoweredBy tone="dark" className="mt-1 text-[11px] in-data-short-viewport:mt-0.5 in-data-short-viewport:leading-none" />
+      <span aria-hidden className="hidden h-0.5 in-data-short-viewport:block" />
     </div>
   );
 }
