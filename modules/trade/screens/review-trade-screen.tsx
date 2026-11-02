@@ -1,7 +1,6 @@
 "use client";
 
-import { useRouter } from "next/navigation";
-import { useDial, usePrimaryAction, useSideKeys, type Dial } from "@/components/console/console-provider";
+import { useDial, useSideKeys, type Dial } from "@/components/console/console-provider";
 import { Screen } from "@/components/shell/screen";
 import { Avatar } from "@/components/ui/avatar";
 import { Card } from "@/components/ui/card";
@@ -31,20 +30,14 @@ function DialRow({ id, label, value, tone, onStep, readout }: Dial & { id: strin
 }
 
 export function ReviewTradeScreen() {
-  const router = useRouter();
-  const { draft, patchDraft } = useTrade();
+  const { draft, patchDraft, available, blocker } = useTrade();
   const { session } = useSession();
   const market = useMarket(draft.marketId);
   const entry = market.price;
-  usePrimaryAction({ label: "Confirm trade", href: "/trade/progress" });
-  // the picked side's key places the trade; the other key flips the direction first
+  // same rule as Build: SELL / BUY pick the direction, holding BUMP places the trade
   useSideKeys({
     selected: draft.side === "long" ? "buy" : "sell",
-    onPress: (key) => {
-      const side = key === "buy" ? "long" : "short";
-      if (side !== draft.side) patchDraft({ side });
-      else router.push("/trade/progress");
-    },
+    onPress: (key) => patchDraft({ side: key === "buy" ? "long" : "short" }),
   });
 
   return (
@@ -63,12 +56,12 @@ export function ReviewTradeScreen() {
         />
         <DialRow
           id="margin"
-          label="Practice margin"
+          label="Your stake"
           value={usd(draft.margin)}
-          onStep={(dir) => patchDraft((d) => ({ margin: stepMargin(d.margin, dir) }))}
-          readout={{ tag: "MARGIN", value: usd(draft.margin) }}
+          onStep={(dir) => patchDraft((d) => ({ margin: stepMargin(d.margin, dir, available) }))}
+          readout={{ tag: "STAKE", value: usd(draft.margin) }}
         />
-        <StatRow label="Position size" value={usd(positionSize(draft))} />
+        <StatRow label="Amount traded" value={usd(positionSize(draft))} />
         <StatRow label="Estimated entry" value={usdPrice(entry)} />
         <DialRow
           id="target"
@@ -89,20 +82,24 @@ export function ReviewTradeScreen() {
       </Card>
 
       <p className="flex items-center gap-2 text-[13px] text-white/90">
-        <InfoDot size={18} /> Stop fills can differ.
+        <InfoDot size={18} /> In a fast market the stop can fill a little past its price.
       </p>
 
-      <div className="flex items-center justify-center gap-3">
-        <Avatar seed={session.name || "you"} size={64} />
-        <SpeechBubble>
-          Looks good?
-          <br />
-          Let’s place it!
-        </SpeechBubble>
-        <Sparkles className="-ml-2 size-7 -scale-x-100 self-start" />
-      </div>
+      {blocker ? (
+        <p className="text-center text-[13px] font-semibold text-coral">{blocker}</p>
+      ) : (
+        <div className="flex items-center justify-center gap-3">
+          <Avatar seed={session.name || "you"} size={64} />
+          <SpeechBubble>
+            Looks good?
+            <br />
+            Hold BUMP!
+          </SpeechBubble>
+          <Sparkles className="-ml-2 size-7 -scale-x-100 self-start" />
+        </div>
+      )}
 
-      <KeyHint side={draft.side} next="place" />
+      <KeyHint action="place" />
     </Screen>
   );
 }

@@ -91,4 +91,27 @@ export const sfx = {
       tone({ freq: 330, to: 262, at: 0.26, dur: 0.3, gain: 0.1 });
     }
   },
+  /** One step of the bump key charging while held; `progress` 0..1 raises the pitch. */
+  charge(progress: number) {
+    tone({ freq: 300 + progress * 600, dur: 0.05, gain: 0.05, type: "triangle" });
+  },
+  /** A press that can't do anything right now: low double buzz. */
+  deny() {
+    tone({ freq: 180, dur: 0.08, gain: 0.1 });
+    tone({ freq: 150, at: 0.1, dur: 0.1, gain: 0.1 });
+  },
+  /** Price crossed halfway to the profit target. */
+  ping() {
+    tone({ freq: 1568, dur: 0.1, gain: 0.08, type: "triangle" });
+    tone({ freq: 2093, at: 0.08, dur: 0.14, gain: 0.06, type: "triangle" });
+  },
+  /** Price crossed halfway to the stop loss. */
+  warn() {
+    tone({ freq: 440, dur: 0.1, gain: 0.08 });
+    tone({ freq: 440, at: 0.16, dur: 0.1, gain: 0.08 });
+  },
+  /** New level reached. */
+  levelUp() {
+    [523, 659, 784, 1047, 1319].forEach((freq, i) => tone({ freq, at: i * 0.08, dur: 0.16, gain: 0.09 }));
+  },
 };

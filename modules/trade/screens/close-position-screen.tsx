@@ -14,6 +14,7 @@ import { StatRow } from "@/components/ui/stat-row";
 import { round2, signedUsd, usd, usdPrice } from "@/lib/format";
 import { useMarket } from "@/modules/market/price-provider";
 import { positionSize, stepClosePct, unrealizedPnl } from "../calc";
+import { KeyHint } from "../components/key-hint";
 import { SideChip } from "../components/trade-header";
 import { useTrade } from "../trade-provider";
 import { useRequirePosition } from "../use-require-position";
@@ -60,11 +61,11 @@ export function ClosePositionScreen() {
 
       <Card className="grid grid-cols-2 px-3 py-2">
         <div className="border-r border-white/20">
-          <p className="text-[13px]">Practice margin</p>
+          <p className="text-[13px]">Your stake</p>
           <p className="font-display text-[19px] font-bold tabular-nums">{usd(position.margin)}</p>
         </div>
         <div className="pl-3">
-          <p className="text-[13px]">Position size</p>
+          <p className="text-[13px]">Amount traded</p>
           <p className="font-display text-[19px] font-bold tabular-nums">{usd(positionSize(position))}</p>
         </div>
       </Card>
@@ -90,23 +91,23 @@ export function ClosePositionScreen() {
       </DialField>
 
       <Card className="divide-y divide-white/15 px-3">
-        <StatRow label="Estimated exit price" value={usdPrice(market.price)} />
+        <StatRow label="Price now" value={usdPrice(market.price)} />
         <StatRow
           label={
             <>
-              Estimated gross profit
-              <InfoTip text="Profit before funding and costs. The final result depends on the fill." />
+              {grossProfit >= 0 ? "You’d win" : "You’d lose"}
+              <InfoTip text="If you closed at this price. The final number depends on the fill." />
             </>
           }
           value={<span className="text-[20px]">{signedUsd(grossProfit)}</span>}
           tone={grossProfit >= 0 ? "positive" : "negative"}
         />
       </Card>
-      <p className="text-center text-[12px] text-white/90">Final result depends on fill and costs.</p>
 
-      <div className="mt-auto flex flex-col gap-2">
+      <KeyHint action="close" />
+      <div className="flex flex-col gap-2">
         <Button variant="danger" size="lg" className="rounded-[18px] text-[20px]" onClick={confirm}>
-          Close it
+          Close {percent}%
         </Button>
         <Button variant="light" size="lg" className="rounded-[18px] text-[20px] font-bold" onClick={() => router.back()}>
           Keep it running

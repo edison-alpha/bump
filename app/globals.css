@@ -200,9 +200,100 @@ a {
   animation: bob 3.2s ease-in-out infinite;
 }
 
+/* Tutorial: the key to press next breathes a cyan halo. */
+@keyframes coach-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgb(76 201 255 / 0.85);
+  }
+  50% {
+    box-shadow: 0 0 0 7px rgb(76 201 255 / 0);
+  }
+}
+
+.coach-pulse {
+  animation: coach-pulse 1.3s ease-out infinite;
+}
+
+/* A press that can't run: quick side-to-side shake. */
+@keyframes shake {
+  0%,
+  100% {
+    translate: 0;
+  }
+  20%,
+  60% {
+    translate: -4px;
+  }
+  40%,
+  80% {
+    translate: 4px;
+  }
+}
+
+.animate-shake {
+  animation: shake 0.32s ease-in-out;
+}
+
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    translate: 0 -8px;
+  }
+  to {
+    opacity: 1;
+    translate: 0;
+  }
+}
+
+.animate-toast {
+  animation: toast-in 0.18s ease-out;
+}
+
+/* Win celebration: pieces fall from the top of the LCD; each sets --x, --r and a delay inline. */
+@keyframes confetti-fall {
+  from {
+    transform: translate3d(0, -20px, 0) rotate(0);
+    opacity: 1;
+  }
+  to {
+    transform: translate3d(var(--x), 420px, 0) rotate(var(--r));
+    opacity: 0;
+  }
+}
+
+.confetti-piece {
+  animation: confetti-fall 1.6s cubic-bezier(0.2, 0.6, 0.4, 1) forwards;
+}
+
+@keyframes pop-in {
+  0% {
+    scale: 0.6;
+    opacity: 0;
+  }
+  70% {
+    scale: 1.08;
+    opacity: 1;
+  }
+  100% {
+    scale: 1;
+  }
+}
+
+.animate-pop {
+  animation: pop-in 0.42s ease-out both;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .animate-bob,
-  .animate-spin {
+  .animate-spin,
+  .coach-pulse,
+  .animate-shake,
+  .confetti-piece,
+  .animate-pop {
     animation: none;
+  }
+  .confetti-piece {
+    display: none;
   }
 }

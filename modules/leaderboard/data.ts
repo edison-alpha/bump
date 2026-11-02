@@ -38,17 +38,23 @@ const LOSSES: Entry[] = [
   { id: "yuki", name: "Yuki", value: -8.4 },
 ];
 
-const YOU_WEEKLY_PNL = 18.2;
+/** How far back each period reaches, for the player's own closed trades. */
+export const PERIOD_MS: Record<Period, number> = { today: 86_400_000, week: 7 * 86_400_000, month: 30 * 86_400_000 };
 
-type YouInput = { name: string; visible: boolean } | null;
+/** The player, with their real net PnL for the period (from their trade history). */
+type YouInput = { name: string; value: number } | null;
 
+/**
+ * The board for a kind and period. The player is always ranked against the sample entries, on the side their PnL
+ * falls on (wins if >= 0, losses below), so they can see where they'd stand even while hidden from others.
+ */
 export function getLeaderboard(kind: Kind, period: Period, you: YouInput): RankedEntry[] {
   const scale = PERIOD_SCALE[period];
   const base = kind === "wins" ? WINS : LOSSES;
   const entries: Entry[] = base.map((e) => ({ ...e, value: Math.round(e.value * scale * 100) / 100 }));
 
-  if (kind === "wins" && you?.visible) {
-    entries.push({ id: "you", name: you.name, value: Math.round(YOU_WEEKLY_PNL * scale * 100) / 100, isYou: true });
+  if (you && (kind === "wins" ? you.value >= 0 : you.value < 0)) {
+    entries.push({ id: "you", name: you.name, value: Math.round(you.value * 100) / 100, isYou: true });
   }
 
   entries.sort((a, b) => (kind === "wins" ? b.value - a.value : a.value - b.value));

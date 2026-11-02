@@ -9,7 +9,7 @@ import { useTrade } from "../trade-provider";
 
 export function HistoryScreen() {
   const { history } = useTrade();
-  usePrimaryAction({ label: "Make my first call", href: "/markets" });
+  usePrimaryAction({ label: history.length ? "Make a call" : "Make my first call", href: "/markets" });
 
   return (
     <Screen title="Trade history">

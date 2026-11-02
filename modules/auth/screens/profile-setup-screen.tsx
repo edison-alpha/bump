@@ -17,7 +17,8 @@ const toUsername = (name: string) => name.toLowerCase().replace(/[^a-z0-9_]/g, "
 export function ProfileSetupScreen() {
   const router = useRouter();
   const { session, saveProfile } = useSession();
-  const [name, setName] = useState(session.name);
+  // a guest signing up starts from a blank name, not "Guest"
+  const [name, setName] = useState(session.status === "guest" || session.name === "Guest" ? "" : session.name);
   const [username, setUsername] = useState(session.username);
   const [edited, setEdited] = useState(!!session.username);
   const [visible, setVisible] = useState(session.showOnLeaderboard);
@@ -26,6 +27,12 @@ export function ProfileSetupScreen() {
   const save = () => {
     if (!canSubmit) return;
     saveProfile({ name: name.trim(), username, showOnLeaderboard: visible });
+    router.push("/home");
+  };
+  /** Playing matters more than a name: fall back to the email's first part, hidden from the leaderboard. */
+  const skip = () => {
+    const fallback = session.email.split("@")[0] || "player";
+    saveProfile({ name: fallback, username: toUsername(fallback) || "player", showOnLeaderboard: false });
     router.push("/home");
   };
   usePrimaryAction({ label: "Let’s go", onPress: save, disabled: !canSubmit });
@@ -41,7 +48,7 @@ export function ProfileSetupScreen() {
       >
         <div className="relative mx-auto">
           <Sparkles className="absolute top-1 -left-10" />
-          <Avatar seed={name || "you"} size={92} ring badge={<Icon name="camera" size={18} />} />
+          <Avatar seed={name || "you"} size={92} ring />
         </div>
         <p className="text-center text-[14px] leading-snug text-white">
           Pick a name. It’s how other players spot you on the leaderboard.
@@ -85,6 +92,9 @@ export function ProfileSetupScreen() {
         <Button type="submit" size="lg" className="mt-auto" disabled={!canSubmit} trailing={<Icon name="next" size={26} />}>
           Let’s go
         </Button>
+        <button type="button" onClick={skip} className="-mt-1 text-center text-[13px] text-white/85 underline underline-offset-4">
+          Skip for now
+        </button>
       </form>
     </Screen>
   );

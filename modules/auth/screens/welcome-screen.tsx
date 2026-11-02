@@ -17,7 +17,12 @@ export function WelcomeScreen() {
   const router = useRouter();
   const { signIn, continueAsGuest } = useSession();
   useRedirectIfSignedIn();
-  usePrimaryAction({ label: "Sign in with email", href: "/sign-in" });
+  // straight into the guided first trade; an account is offered once there's a score worth saving
+  const play = () => {
+    continueAsGuest();
+    router.push("/markets");
+  };
+  usePrimaryAction({ label: "Play now", onPress: play });
 
   return (
     <Screen
@@ -43,34 +48,28 @@ export function WelcomeScreen() {
       </div>
 
       <div className="flex flex-col gap-2">
-        <GoogleButton
-          withChevron
-          size="lg"
-          onClick={() => {
-            signIn();
-            router.push("/profile-setup");
-          }}
-        />
-        <Button
-          variant="outline"
-          size="lg"
-          href="/sign-in"
-          className="px-5"
-          leading={<Icon name="mail" size={28} />}
-          trailing={<Icon name="chevron" size={24} />}
-        >
-          <span className="flex-1 text-center">Sign in with email</span>
+        <Button size="lg" className="h-14 text-[22px]" onClick={play} trailing={<Icon name="next" size={26} />}>
+          Play now
         </Button>
-        <button
-          type="button"
-          className="inline-flex items-center justify-center gap-1.5 py-0.5 text-[15px] text-white"
-          onClick={() => {
-            continueAsGuest();
-            router.push("/home");
-          }}
-        >
-          Play as a guest <Icon name="next" size={18} />
-        </button>
+        <p className="-mt-0.5 text-center text-[12px] text-white/85">No sign-up. Your first trade takes 30 seconds.</p>
+        <div className="flex items-center gap-3 text-[12px] text-white/75">
+          <span className="h-px flex-1 bg-white/25" />
+          Have an account?
+          <span className="h-px flex-1 bg-white/25" />
+        </div>
+        <div className="grid grid-cols-2 gap-2">
+          <GoogleButton
+            short
+            size="md"
+            onClick={() => {
+              signIn();
+              router.push("/profile-setup");
+            }}
+          />
+          <Button variant="outline" size="md" href="/sign-in" leading={<Icon name="mail" size={22} />}>
+            Email
+          </Button>
+        </div>
       </div>
     </Screen>
   );

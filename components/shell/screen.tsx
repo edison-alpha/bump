@@ -81,6 +81,33 @@ export function Screen({ title, back = true, right, header, children, className 
       </Lcd>
       {/* panel corner = this box's px-3 / pb-2.5 */}
       <MiniLcd right={12} bottom={10} />
+      <LcdToast />
+    </div>
+  );
+}
+
+const TOAST_TONE = {
+  info: "border-cyan/60 text-white",
+  warn: "border-coral/70 text-[#ffd0d6]",
+  good: "border-mint/70 text-[#c9ffe9]",
+} as const;
+
+/** The console's short messages (why a key did nothing, what to do next), across the top of the LCD. */
+function LcdToast() {
+  const { toast } = useConsole();
+  return (
+    <div aria-live="polite" className="pointer-events-none absolute inset-x-6 top-14 z-20 flex justify-center">
+      {toast && (
+        <p
+          key={toast.id}
+          className={cn(
+            "animate-toast rounded-full border bg-navy-950/95 px-4 py-1.5 text-center font-display text-[14px] font-semibold shadow-[0_6px_16px_rgba(0,0,0,0.45)]",
+            TOAST_TONE[toast.tone],
+          )}
+        >
+          {toast.text}
+        </p>
+      )}
     </div>
   );
 }

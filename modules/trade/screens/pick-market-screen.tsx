@@ -1,16 +1,16 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState } from "react";
-import { useDial, usePrimaryAction, useSideKeys } from "@/components/console/console-provider";
+import { useDial, useSideKeys } from "@/components/console/console-provider";
 import { Screen } from "@/components/shell/screen";
-import { Clouds } from "@/components/ui/decor";
-import { Icon } from "@/components/ui/icon";
+import { Button } from "@/components/ui/button";
 import { Mascot } from "@/components/ui/mascot";
 import { SpeechBubble } from "@/components/ui/speech-bubble";
 import { signedPct, usdPriceShort } from "@/lib/format";
 import { MarketRow } from "@/modules/market/components/market-row";
 import { useMarkets } from "@/modules/market/price-provider";
+import { Coach, KeyName } from "@/modules/progress/components/coach";
+import { useProgress } from "@/modules/progress/progress-provider";
 import { useTrade } from "../trade-provider";
 import type { Side } from "../types";
 
@@ -18,58 +18,53 @@ export function PickMarketScreen() {
   const router = useRouter();
   const markets = useMarkets();
   const { draft, patchDraft } = useTrade();
-  const [query, setQuery] = useState("");
-
-  const filtered = markets.filter((m) => `${m.name} ${m.symbol}`.toLowerCase().includes(query.trim().toLowerCase()));
+  const { tutorialActive } = useProgress();
 
   const choose = (side: Side) => {
     patchDraft({ side });
     router.push("/trade/build");
   };
-  usePrimaryAction({ label: `Build a ${draft.side} trade`, href: "/trade/build" });
-  // SELL / BUY on the hardware keys pick the direction and go on; the wheel picks the market
+  // picking the direction is this screen's step: SELL / BUY pick it and go on; the wheel (or a tap) picks the coin
   useSideKeys({ selected: null, onPress: (key) => choose(key === "buy" ? "long" : "short") });
   const selected = markets.find((m) => m.id === draft.marketId) ?? markets[0];
   useDial("market", {
-    label: "Market",
+    label: "Coin",
     onStep: (dir) => {
-      const list = filtered.length ? filtered : markets;
-      const i = list.findIndex((m) => m.id === draft.marketId);
-      const nextMarket = list[Math.min(list.length - 1, Math.max(0, i - dir))];
-      patchDraft({ marketId: nextMarket.id });
+      const i = markets.findIndex((m) => m.id === draft.marketId);
+      patchDraft({ marketId: markets[Math.min(markets.length - 1, Math.max(0, i - dir))].id });
     },
     readout: { tag: selected.symbol, value: signedPct(selected.change, 1), sub: usdPriceShort(selected.price), tone: selected.change >= 0 ? "positive" : "negative" },
   });
 
   return (
     <Screen title="Pick a coin">
-      <label className="recess flex h-11 shrink-0 items-center gap-3 rounded-[12px] px-3.5 focus-within:border-cyan">
-        <Icon name="search" size={22} className="text-white" />
-        <input
-          type="search"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          placeholder="Search markets"
-          aria-label="Search markets"
-          className="min-w-0 flex-1 bg-transparent text-[16px] outline-none placeholder:text-white/70"
-        />
-      </label>
+      <Coach step={1} points="sides">
+        Think {selected.name} goes up? Press <KeyName tone="buy">BUY</KeyName>. Down? Press <KeyName tone="sell">SELL</KeyName>.
+      </Coach>
 
       <div className="flex flex-col gap-2">
-        {filtered.map((m) => (
+        {markets.map((m) => (
           <MarketRow key={m.id} market={m} selected={m.id === draft.marketId} onSelect={() => patchDraft({ marketId: m.id })} />
         ))}
-        {filtered.length === 0 && <p className="py-6 text-center text-white/70">No markets match “{query}”.</p>}
       </div>
 
-      <div className="relative -mx-3 mt-auto flex items-center justify-center gap-2 px-3">
-        <Clouds className="absolute inset-x-0 bottom-0 h-10" />
-        <Mascot size={112} sparkles="left" className="relative" />
-        <SpeechBubble className="relative">
-          Up or down?
-          <br />
-          <span className="text-mint-deep">BUY</span> if it climbs, <span className="text-coral-deep">SELL</span> if it drops.
-        </SpeechBubble>
+      {!tutorialActive && (
+        <div className="relative mt-auto flex items-center justify-center gap-2">
+          <Mascot size={84} sparkles="left" className="relative" />
+          <SpeechBubble className="relative">
+            {selected.name}: up or down?
+          </SpeechBubble>
+        </div>
+      )}
+
+      {/* the same choice as the SELL / BUY keys, for people who reach for the screen */}
+      <div className="mt-auto grid grid-cols-2 gap-2">
+        <Button variant="short" size="lg" onClick={() => choose("short")}>
+          SELL · drops
+        </Button>
+        <Button variant="long" size="lg" onClick={() => choose("long")}>
+          BUY · climbs
+        </Button>
       </div>
     </Screen>
   );

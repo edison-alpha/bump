@@ -20,10 +20,10 @@ const STEPS = [
   { title: "Waiting to fill", hint: "Your trade will open soon." },
 ] as const;
 
-/** Mock order lifecycle: each step resolves on a timer, the last one opens the position. */
-const STEP_DELAYS_MS = [700, 1500, 3200];
+/** Mock order lifecycle: each step resolves on a timer, the last one opens the position. Short: waiting isn't fun. */
+const STEP_DELAYS_MS = [350, 800, 1400];
 /** How long "Your trade is live!" stays up before the position screen takes over. */
-const LIVE_HOLD_MS = 900;
+const LIVE_HOLD_MS = 700;
 
 function StepMark({ state }: { state: "done" | "active" | "todo" }) {
   if (state === "done") {
@@ -45,12 +45,15 @@ function StepMark({ state }: { state: "done" | "active" | "todo" }) {
 
 export function OrderProgressScreen() {
   const router = useRouter();
-  const { draft, position, openPosition, ready } = useTrade();
+  const { draft, position, openPosition, blocker, ready } = useTrade();
   const market = useMarket(draft.marketId);
   const [done, setDone] = useState(0);
+  const [rejected, setRejected] = useState<string | null>(null);
   const opened = useRef(false);
-  const filled = done >= STEPS.length && !!position;
-  usePrimaryAction({ label: "View order", href: "/position", disabled: !filled });
+  const filled = done >= STEPS.length && !!position && !rejected;
+  usePrimaryAction(
+    rejected ? { label: "Fix my trade", href: "/trade/build" } : { label: "View trade", href: "/position", disabled: !filled },
+  );
 
   useEffect(() => {
     const timers = STEP_DELAYS_MS.map((ms, i) => setTimeout(() => setDone(i + 1), ms));
@@ -60,9 +63,9 @@ export function OrderProgressScreen() {
   useEffect(() => {
     if (done >= STEPS.length && ready && !opened.current) {
       opened.current = true;
-      openPosition(market.price);
+      if (!openPosition(market.price)) setRejected(blocker ?? "The order couldn’t be placed.");
     }
-  }, [done, ready, openPosition, market.price]);
+  }, [done, ready, openPosition, market.price, blocker]);
 
   // filled: go straight to the live position (replace, so Back doesn't land on this screen again)
   useEffect(() => {
@@ -79,10 +82,16 @@ export function OrderProgressScreen() {
         <Clouds className="absolute inset-x-0 top-[30%] h-10 opacity-80" />
         <Mascot size={118} sparkles="both" className="relative" />
         <h2 className="text-pop relative mt-1 text-center font-display text-[27px] leading-[1.05] font-bold">
-          {filled ? "Your trade is live!" : "Getting your trade ready."}
+          {rejected ? "Order not placed" : filled ? "Your trade is live!" : "Getting your trade ready."}
         </h2>
       </div>
 
+      {rejected ? (
+        <Card className="flex flex-col gap-2 px-3 py-3 text-center">
+          <p className="font-display text-[16px] font-semibold text-coral">{rejected}</p>
+          <Button href="/trade/build">Fix my trade</Button>
+        </Card>
+      ) : (
       <Card className="px-3 py-0.5">
         <ol aria-live="polite">
           {STEPS.map((step, i) => {
@@ -102,15 +111,12 @@ export function OrderProgressScreen() {
           })}
         </ol>
       </Card>
+      )}
 
       <p className="flex items-center gap-2.5 px-1 text-[13px] leading-snug text-white">
         <InfoDot size={22} />
-        Your position opens only when the order fills.
+        Your trade opens when the order fills. It closes itself at your target or stop.
       </p>
-
-      <Button variant="light" size="sm" className="mt-auto" leading={<Icon name="help" size={20} />}>
-        Need help?
-      </Button>
     </Screen>
   );
 }

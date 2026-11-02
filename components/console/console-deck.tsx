@@ -17,8 +17,20 @@ const MODES = [
   { href: "/leaderboard", label: "Ranks", match: ["/leaderboard"] },
 ] as const;
 
+/** Top-level screens: PREV has nowhere to go from these. */
+const ROOTS: string[] = ["/", "/home", "/leaderboard"];
+
 const isTyping = (el: EventTarget | null) =>
   el instanceof HTMLElement && (el.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(el.tagName));
+
+/** Small second line on a key: what it does on this screen. */
+function KeySub({ children }: { children: string }) {
+  return (
+    <span className="mt-1 max-w-[92%] truncate font-sans text-[9px] font-bold tracking-normal normal-case opacity-70">
+      {children}
+    </span>
+  );
+}
 
 /** Corner LED of a SELL / BUY key: dim in its color, bright when that side is picked. */
 function SideLed({ on, tone }: { on: boolean; tone: "sell" | "buy" }) {
@@ -47,11 +59,13 @@ export function ConsoleDeck() {
   const router = useRouter();
   const pathname = usePathname();
   const { session } = useSession();
-  const { action, sideKeys } = useConsole();
+  const { action, sideKeys, coachKey } = useConsole();
   const { position } = useTrade();
   const signedIn = session.status !== "signed-out";
   const next = action?.current ?? null;
   const sides = sideKeys?.current ?? null;
+  // nothing to go back to from the top-level screens (history back would leave the app or land on sign-in)
+  const canGoBack = !ROOTS.includes(pathname);
 
   const pressNext = () => {
     const a = action?.current;
@@ -61,7 +75,7 @@ export function ConsoleDeck() {
   };
 
   // with SELL / BUY on the keys, left = sell and right = buy
-  const pressLeft = () => (sideKeys?.current ? sideKeys.current.onPress("sell") : router.back());
+  const pressLeft = () => (sideKeys?.current ? sideKeys.current.onPress("sell") : canGoBack && router.back());
   const pressRight = () => (sideKeys?.current ? sideKeys.current.onPress("buy") : pressNext());
 
   useEffect(() => {
@@ -82,28 +96,44 @@ export function ConsoleDeck() {
             <div className="grid grid-cols-2 gap-2.5">
               <Keycap
                 tone="dark"
-                aria-label={sides.selected === "sell" ? "Sell (short) selected. Press again to continue" : "Sell (short)"}
+                aria-label={sides.selected === "sell" ? "Sell (short), selected" : "Sell (short): bet the price drops"}
                 aria-pressed={sides.selected === "sell"}
                 onClick={pressLeft}
-                className={cn("h-12 rounded-[13px] text-[16px] text-[#ff8a9b]", sides.selected === "sell" && "text-[#ffb3be]")}
+                className={cn(
+                  "flex h-12 flex-col items-center justify-center rounded-[13px] text-[16px] leading-none text-[#ff8a9b]",
+                  sides.selected === "sell" && "text-[#ffb3be]",
+                  coachKey === "sides" && "coach-pulse",
+                )}
               >
                 SELL
+                <KeySub>{sides.selected === "sell" ? "picked" : "price drops"}</KeySub>
                 <SideLed on={sides.selected === "sell"} tone="sell" />
               </Keycap>
               <Keycap
                 tone="dark"
-                aria-label={sides.selected === "buy" ? "Buy (long) selected. Press again to continue" : "Buy (long)"}
+                aria-label={sides.selected === "buy" ? "Buy (long), selected" : "Buy (long): bet the price climbs"}
                 aria-pressed={sides.selected === "buy"}
                 onClick={pressRight}
-                className={cn("h-12 rounded-[13px] text-[16px] text-[#5dffc0]", sides.selected === "buy" && "text-[#a6ffdc]")}
+                className={cn(
+                  "flex h-12 flex-col items-center justify-center rounded-[13px] text-[16px] leading-none text-[#5dffc0]",
+                  sides.selected === "buy" && "text-[#a6ffdc]",
+                  coachKey === "sides" && "coach-pulse",
+                )}
               >
                 BUY
+                <KeySub>{sides.selected === "buy" ? "picked" : "price climbs"}</KeySub>
                 <SideLed on={sides.selected === "buy"} tone="buy" />
               </Keycap>
             </div>
           ) : (
             <div className="grid grid-cols-2 gap-2.5">
-              <Keycap tone="dark" aria-label="Previous screen" onClick={pressLeft} className="h-12 rounded-[13px] text-[16px]">
+              <Keycap
+                tone="dark"
+                aria-label="Previous screen"
+                disabled={!canGoBack}
+                onClick={pressLeft}
+                className="h-12 rounded-[13px] text-[16px]"
+              >
                 PREV
               </Keycap>
               <Keycap
@@ -112,9 +142,14 @@ export function ConsoleDeck() {
                 title={next?.label}
                 disabled={!next || next.disabled}
                 onClick={pressRight}
-                className="h-12 rounded-[13px] text-[16px]"
+                className={cn(
+                  "flex h-12 flex-col items-center justify-center rounded-[13px] text-[16px] leading-none",
+                  coachKey === "next" && "coach-pulse",
+                )}
               >
                 NEXT
+                {/* the key's legend changes with the screen, so say what it does */}
+                {next && <KeySub>{next.label}</KeySub>}
                 <span
                   aria-hidden
                   className={cn(

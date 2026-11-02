@@ -38,10 +38,8 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     (profile?: Partial<Session>) => setSession((s) => ({ ...s, ...profile, status: "member" })),
     [setSession],
   );
-  const continueAsGuest = useCallback(
-    () => setSession({ ...EMPTY, status: "guest", name: "Guest", username: "guest" }),
-    [setSession],
-  );
+  // no username, so a guest who signs in later is sent to profile setup (their trades and XP stay)
+  const continueAsGuest = useCallback(() => setSession({ ...EMPTY, status: "guest", name: "Guest" }), [setSession]);
   const saveProfile = useCallback(
     (profile: ProfileInput) => setSession((s) => ({ ...s, ...profile, status: "member" })),
     [setSession],

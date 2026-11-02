@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import { ConsoleProvider } from "@/components/console/console-provider";
 import { ClickSounds } from "@/components/shell/click-sounds";
 import { PriceProvider } from "@/modules/market/price-provider";
+import { ProgressProvider } from "@/modules/progress/progress-provider";
 import { SessionProvider } from "@/modules/session/session-provider";
 import { LimitWatcher } from "@/modules/trade/components/limit-watcher";
 import { TradeProvider } from "@/modules/trade/trade-provider";
@@ -14,8 +15,10 @@ export function Providers({ children }: { children: ReactNode }) {
       <ClickSounds />
       <PriceProvider>
         <TradeProvider>
-          <LimitWatcher />
-          <ConsoleProvider>{children}</ConsoleProvider>
+          <ProgressProvider>
+            <LimitWatcher />
+            <ConsoleProvider>{children}</ConsoleProvider>
+          </ProgressProvider>
         </TradeProvider>
       </PriceProvider>
     </SessionProvider>

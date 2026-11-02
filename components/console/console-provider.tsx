@@ -57,7 +57,18 @@ type ConsoleContextValue = {
   /** Readout of the active dial, kept in state so the mini LCD follows on-screen edits and live prices too. */
   activeReadout: Readout | null;
   setReadout: (id: string, readout: Readout | null) => void;
+  /** Short message across the top of the LCD, e.g. why a key press did nothing. */
+  toast: Toast | null;
+  flash: (text: string, tone?: Toast["tone"]) => void;
+  /** Hardware key the tutorial points at; it pulses until the step is done. */
+  coachKey: CoachKey | null;
+  setCoachKey: (key: CoachKey | null) => void;
 };
+
+export type Toast = { id: number; text: string; tone: "info" | "warn" | "good" };
+export type CoachKey = "bump" | "sides" | "next" | "wheel";
+
+const TOAST_MS = 2200;
 
 const ConsoleContext = createContext<ConsoleContextValue | null>(null);
 
@@ -94,6 +105,16 @@ export function ConsoleProvider({ children }: { children: ReactNode }) {
   );
   const activeReadout = (activeDial && readouts[activeDial.id]) ?? null;
 
+  const [toast, setToast] = useState<Toast | null>(null);
+  const flash = useCallback((text: string, tone: Toast["tone"] = "info") => setToast({ id: Date.now(), text, tone }), []);
+  useEffect(() => {
+    if (!toast) return;
+    const id = setTimeout(() => setToast(null), TOAST_MS);
+    return () => clearTimeout(id);
+  }, [toast]);
+
+  const [coachKey, setCoachKey] = useState<CoachKey | null>(null);
+
   const value = useMemo(
     () => ({
       screenEl,
@@ -110,8 +131,27 @@ export function ConsoleProvider({ children }: { children: ReactNode }) {
       registerDial,
       activeReadout,
       setReadout,
+      toast,
+      flash,
+      coachKey,
+      setCoachKey,
     }),
-    [screenEl, slot, registerAction, sideSlot, registerSideKeys, activeDial, dials.length, cycleDial, registerDial, activeReadout, setReadout],
+    [
+      screenEl,
+      slot,
+      registerAction,
+      sideSlot,
+      registerSideKeys,
+      activeDial,
+      dials.length,
+      cycleDial,
+      registerDial,
+      activeReadout,
+      setReadout,
+      toast,
+      flash,
+      coachKey,
+    ],
   );
   return <ConsoleContext.Provider value={value}>{children}</ConsoleContext.Provider>;
 }
@@ -181,4 +221,13 @@ export function useDial(id: string, dial: Dial) {
   useEffect(() => () => setReadout(id, null), [id, setReadout]);
 
   return { active: activeDialId === id, activate: () => activateDial(id) };
+}
+
+/** Makes `key` pulse on the deck while this screen is up (tutorial). Pass null for no pulse. */
+export function useCoachKey(key: CoachKey | null) {
+  const { setCoachKey } = useConsole();
+  useEffect(() => {
+    setCoachKey(key);
+    return () => setCoachKey(null);
+  }, [key, setCoachKey]);
 }
