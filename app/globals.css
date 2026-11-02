@@ -79,10 +79,16 @@ a {
   padding-bottom: max(12px, env(safe-area-inset-bottom, 0px));
 }
 
+@media (max-width: 767px) and (display-mode: standalone) {
+  .console-deck {
+    padding-bottom: max(4px, env(safe-area-inset-bottom, 0px));
+  }
+}
+
 /* A short iOS web view already excludes the home indicator, but the footer still needs room. */
 @media (max-width: 767px) {
   [data-short-viewport] .console-deck {
-    padding-bottom: 12px;
+    padding-bottom: 4px;
   }
 }
 
