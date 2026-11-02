@@ -51,7 +51,7 @@ export function ConsoleDeck() {
   });
 
   return (
-    <div className="shrink-0 px-4 pt-0.5 pb-[max(0.375rem,calc(env(safe-area-inset-bottom)-14px))]">
+    <div className="shrink-0 px-4 pt-0.5 pb-[max(0.375rem,calc(env(safe-area-inset-bottom)-14px))] in-data-short-viewport:pb-2">
       <div className="flex items-stretch gap-3">
         <div className="flex flex-1 flex-col gap-2.5">
           <div className="grid grid-cols-2 gap-2.5">

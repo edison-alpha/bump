@@ -87,6 +87,17 @@ a {
     inset 0 -12px 12px -2px rgb(0 60 160 / 0.45);
 }
 
+/* Short iOS standalone web view (see standalone-viewport.tsx): no bottom shade, so the bezel runs into the
+   #1585ee strip iOS paints below the page without a seam. */
+@media (max-width: 767px) {
+  [data-short-viewport] .console {
+    box-shadow:
+      inset 0 7px 6px -2px rgb(255 255 255 / 0.5),
+      inset 7px 0 8px -2px rgb(255 255 255 / 0.2),
+      inset -7px 0 10px -2px rgb(0 60 160 / 0.25);
+  }
+}
+
 /* Larger screens: the same bezel as a free-standing device (rounded, rimmed, floating). */
 @utility console-device {
   border-radius: 40px;

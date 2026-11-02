@@ -1,8 +1,10 @@
 /*
- * iOS standalone PWA (black-translucent status bar) reports a viewport one status bar shorter than the
- * screen, so a `fixed inset-0` console stops short and the page background shows under the deck.
- * In standalone mode the app always owns the whole screen, so pin the console's height to the screen's.
- * Inline script (not an effect) so the first paint is already the right size.
+ * Some iOS versions give a standalone PWA (black-translucent status bar) a web view that stops short of the
+ * bottom of the screen; iOS paints the strip below it with the page background and web content can't draw
+ * there. The home indicator then sits outside the page, so the deck's safe-area padding is wasted space.
+ * When that happens, mark <html data-short-viewport>: the deck drops its bottom inset and the bezel loses its
+ * bottom shade so it runs straight into the system strip (same colour, see globals.css).
+ * Inline script (not an effect) so the first paint already has the right layout.
  */
 const SCRIPT = `(() => {
   const root = document.documentElement;
@@ -10,14 +12,13 @@ const SCRIPT = `(() => {
     const standalone = navigator.standalone || matchMedia("(display-mode: standalone)").matches;
     const portrait = innerHeight >= innerWidth;
     const full = portrait ? Math.max(screen.width, screen.height) : Math.min(screen.width, screen.height);
-    if (standalone && full > innerHeight) root.style.setProperty("--app-h", full + "px");
-    else root.style.removeProperty("--app-h");
+    root.toggleAttribute("data-short-viewport", Boolean(standalone && full - innerHeight > 20));
   };
   fit();
   addEventListener("resize", fit);
   addEventListener("orientationchange", fit);
 })();`;
 
-export function StandaloneHeight() {
+export function StandaloneViewport() {
   return <script dangerouslySetInnerHTML={{ __html: SCRIPT }} />;
 }
