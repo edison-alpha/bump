@@ -46,7 +46,7 @@ export function LeaderboardScreen() {
   const rows = wins ? entries.slice(3) : entries;
 
   return (
-    <Screen title="Leaderboard">
+    <Screen title="Leaderboard" className="[&>*]:shrink-0">
       <div className="grid grid-cols-2 gap-2" role="tablist" aria-label="Leaderboard type">
         {KINDS.map(({ value, label, icon, tint, active }) => {
           const on = kind === value;
