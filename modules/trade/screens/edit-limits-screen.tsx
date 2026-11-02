@@ -1,0 +1,58 @@
+"use client";
+
+import { useRouter } from "next/navigation";
+import { useState } from "react";
+import { usePrimaryAction } from "@/components/console/console-provider";
+import { Screen } from "@/components/shell/screen";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { StatRow } from "@/components/ui/stat-row";
+import { signedUsd, usd } from "@/lib/format";
+import { DialField } from "@/components/console/dial-field";
+import { lossAtStop, profitAtTarget, stepPct, stopPrice, targetPrice } from "../calc";
+import { LimitRow } from "../components/limit-row";
+import { useTrade } from "../trade-provider";
+import { useRequirePosition } from "../use-require-position";
+
+export function EditLimitsScreen() {
+  const router = useRouter();
+  const position = useRequirePosition();
+  const { updateLimits } = useTrade();
+  const [target, setTarget] = useState<number | null>(null);
+  const [stop, setStop] = useState<number | null>(null);
+
+  const targetPct = target ?? position?.targetPct ?? 0;
+  const stopPct = stop ?? position?.stopPct ?? 0;
+  const save = () => {
+    updateLimits({ targetPct, stopPct });
+    router.back();
+  };
+  usePrimaryAction(position ? { label: "Save limits", onPress: save } : null);
+
+  if (!position) return <Screen title="Edit limits">{null}</Screen>;
+
+  const next = { ...position, targetPct, stopPct };
+
+  return (
+    <Screen title="Edit limits">
+      <DialField id="target" label="Profit target" onStep={(dir) => setTarget((t) => stepPct(t ?? position.targetPct, dir))}>
+        <LimitRow kind="target" value={targetPct} onChange={setTarget} />
+      </DialField>
+      <DialField id="stop" label="Stop loss" onStep={(dir) => setStop((s) => stepPct(s ?? position.stopPct, dir, 0.5, 10))}>
+        <LimitRow kind="stop" value={stopPct} onChange={setStop} />
+      </DialField>
+
+      <Card className="divide-y divide-white/15 px-3">
+        <StatRow label="Target price" value={usd(targetPrice(position.entry, next))} tone="positive" />
+        <StatRow label="Profit at target" value={signedUsd(profitAtTarget(next))} tone="positive" />
+        <StatRow label="Stop price" value={usd(stopPrice(position.entry, next))} tone="negative" />
+        <StatRow label="Loss at stop" value={signedUsd(-lossAtStop(next))} tone="negative" />
+      </Card>
+      <p className="text-[13px] text-white/80">Before funding and costs. Stop fills can differ.</p>
+
+      <Button size="lg" className="mt-auto" onClick={save}>
+        Save limits
+      </Button>
+    </Screen>
+  );
+}

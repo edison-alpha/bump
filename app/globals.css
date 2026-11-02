@@ -1,0 +1,180 @@
+@import "tailwindcss";
+
+@theme {
+  --font-display: var(--font-fredoka), ui-rounded, system-ui, sans-serif;
+  --font-sans: var(--font-nunito), system-ui, sans-serif;
+
+  --color-bump-100: #dff3ff;
+  --color-bump-200: #b9e5ff;
+  --color-bump-300: #7fd3ff;
+  --color-bump-400: #3fb8ff;
+  --color-bump-500: #1a9dff;
+  --color-bump-600: #0d86f2;
+  --color-bump-700: #0a63c4;
+  --color-cyan: #4cc9ff;
+
+  --color-navy-950: #071322;
+  --color-navy-900: #0c1a2e;
+  --color-navy-800: #12243d;
+  --color-navy-700: #1b3352;
+  --color-navy-600: #26476f;
+  --color-line: rgb(130 180 240 / 0.2);
+
+  --color-mint: #3fe0a6;
+  --color-mint-deep: #17a571;
+  --color-coral: #ff6377;
+  --color-coral-deep: #e0364f;
+  --color-cream: #fbf6ec;
+  --color-gold: #ffcb3d;
+  --color-peach: #ffb38c;
+}
+
+:root {
+  color-scheme: dark;
+}
+
+/* Phones: the console is the whole screen, so overscroll / safe areas show bezel blue, never a seam. */
+html {
+  background: #2aa3ff;
+}
+
+body {
+  min-height: 100dvh;
+  overflow-x: clip;
+  background: #2aa3ff;
+  font-family: var(--font-sans);
+  color: #fff;
+  -webkit-tap-highlight-color: transparent;
+  overscroll-behavior-y: none;
+}
+
+/* Phones / installed PWA: the console never moves; only the LCD scrolls. */
+@media (max-width: 767px) {
+  html,
+  body {
+    /* bezel's bottom colour, so a short iOS viewport can never show a lighter strip under the deck */
+    background: #1585ee;
+    height: 100%;
+    overflow: hidden;
+    overscroll-behavior: none;
+  }
+}
+
+/* Larger screens: sky backdrop behind the free-standing device. */
+@media (min-width: 768px) {
+  html,
+  body {
+    background: linear-gradient(180deg, #dcf3ff 0%, #a6dcff 100%) fixed;
+  }
+}
+
+button,
+a {
+  touch-action: manipulation;
+}
+
+/* ---------- 3D console materials (see DESIGN.md) ---------- */
+
+/* Inflated blue plastic bezel, full-bleed (phones / installed PWA): material + inner bevel only. */
+@utility console {
+  background:
+    radial-gradient(90% 40% at 18% 0%, rgb(255 255 255 / 0.55), transparent 60%),
+    linear-gradient(180deg, #86d9ff 0%, #45b8ff 30%, #2aa3ff 65%, #1585ee 100%);
+  box-shadow:
+    inset 0 7px 6px -2px rgb(255 255 255 / 0.5),
+    inset 7px 0 8px -2px rgb(255 255 255 / 0.2),
+    inset -7px 0 10px -2px rgb(0 60 160 / 0.25),
+    inset 0 -12px 12px -2px rgb(0 60 160 / 0.45);
+}
+
+/* Larger screens: the same bezel as a free-standing device (rounded, rimmed, floating). */
+@utility console-device {
+  border-radius: 40px;
+  box-shadow:
+    /* light tube rim on the very edge */
+    inset 0 0 0 2px rgb(200 238 255 / 0.95),
+    /* top + left specular, right + bottom shade: reads as a rounded plastic tube */
+    inset 0 7px 6px -2px rgb(255 255 255 / 0.6),
+    inset 7px 0 8px -2px rgb(255 255 255 / 0.25),
+    inset -7px 0 10px -2px rgb(0 60 160 / 0.28),
+    inset 0 -12px 12px -2px rgb(0 60 160 / 0.5),
+    /* dark outline + floating shadow */
+    0 0 0 2px #1784de,
+    0 4px 0 2px #0f6fc4,
+    0 26px 44px -14px rgb(10 90 190 / 0.65);
+}
+
+/* Dark screen recessed into the bezel: groove + light rim + inner shadow. */
+@utility screen-panel {
+  border-radius: 26px;
+  background: linear-gradient(180deg, #12273f 0%, #0c1b2f 50%, #09162a 100%);
+  box-shadow:
+    /* groove, light inner rim, then the bezel's own shade */
+    0 0 0 3px #0a3f86,
+    0 0 0 6px rgb(150 222 255 / 0.75),
+    0 0 0 8px rgb(10 90 190 / 0.35),
+    inset 0 10px 18px rgb(0 0 0 / 0.5),
+    inset 0 1px 0 rgb(255 255 255 / 0.1);
+}
+
+/* Candy highlight band; pair with a gradient background and a lip shadow. */
+@utility gloss {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  &::before {
+    content: "";
+    position: absolute;
+    inset: 2px 8% auto;
+    height: 46%;
+    border-radius: 999px;
+    background: linear-gradient(180deg, rgb(255 255 255 / 0.5), rgb(255 255 255 / 0));
+    pointer-events: none;
+    z-index: -1;
+  }
+}
+
+/* Glassy card on the dark screen. */
+@utility glass {
+  background: linear-gradient(180deg, rgb(255 255 255 / 0.07), rgb(255 255 255 / 0.02));
+  border: 1px solid rgb(140 195 255 / 0.24);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.08),
+    0 3px 8px rgb(0 0 0 / 0.28);
+}
+
+/* Inset field. */
+@utility recess {
+  background: rgb(4 12 26 / 0.55);
+  border: 1px solid rgb(140 195 255 / 0.28);
+  box-shadow: inset 0 2px 6px rgb(0 0 0 / 0.55);
+}
+
+@utility text-pop {
+  text-shadow: 0 2px 0 rgb(0 0 0 / 0.35);
+}
+
+@utility text-emboss {
+  text-shadow: 0 1px 0 rgb(255 255 255 / 0.55);
+}
+
+@keyframes bob {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-4px);
+  }
+}
+
+.animate-bob {
+  animation: bob 3.2s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-bob,
+  .animate-spin {
+    animation: none;
+  }
+}
