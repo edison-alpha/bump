@@ -3,6 +3,7 @@ import { Fredoka, Nunito } from "next/font/google";
 import type { ReactNode } from "react";
 import { PhoneFrame } from "@/components/shell/phone-frame";
 import { RegisterServiceWorker } from "@/components/shell/register-sw";
+import { StandaloneHeight } from "@/components/shell/standalone-height";
 import { Providers } from "./providers";
 import "./globals.css";
 
@@ -31,8 +32,9 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
-    <html lang="en" className={`${display.variable} ${sans.variable}`}>
+    <html lang="en" suppressHydrationWarning className={`${display.variable} ${sans.variable}`}>
       <body>
+        <StandaloneHeight />
         <Providers>
           <PhoneFrame>{children}</PhoneFrame>
         </Providers>

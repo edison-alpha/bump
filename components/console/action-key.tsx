@@ -26,6 +26,8 @@ export function ActionKey() {
   const press = () => {
     if (!signedIn) return router.push("/sign-in");
     if (mode === "open") {
+      // the order is already on its way; the key does nothing until it fills (then it becomes CLOSE)
+      if (pathname === "/trade/progress") return;
       router.push(pathname === "/trade/review" ? "/trade/progress" : "/trade/review");
       return;
     }

@@ -24,9 +24,9 @@ The app reads like a handheld game console made of glossy blue plastic.
 | **NEXT** key (charcoal, mint LED when live) | The current screen's main action, registered with `usePrimaryAction()` (Build → Review, Review → Confirm, Close → Close n%, Ranks → toggle wins/losses …). Keyboard →. |
 | **Mode keys** HOME · TRADE · RANKS | Small pill keys with an LED on the active mode; disabled when signed out. |
 | **Bump key** (gold square with the mascot, printed OPEN / CLOSE) | The trade trigger. No position: press → Review, press again → trade placed. Position open: press → Close Position, press again → closes the chosen amount. Two presses on purpose so a stray tap never trades. Signed out: goes to sign-in. Profile lives behind the Home avatar. |
-| **Thumbwheel** (3D ribbed cylinder in a recessed slot) | A jog dial for values. Adjustable fields are wrapped in `DialField`; tap one to select it (cyan ring + "DIAL" tag, wheel LED lights) and roll the wheel: one detent = one step with a haptic tick (margin $1, leverage next option, target/stop 0.5%, close amount 5%). Drag, mouse-wheel or ↑/↓. On screens without dials it scrolls the LCD. |
+| **Thumbwheel** (3D ribbed cylinder in a recessed slot) | A jog dial for values. Adjustable fields are wrapped in `DialField`; tap one (or tap the wheel itself / Enter, which moves to the next field) to select it (cyan ring + "DIAL" tag, wheel LED lights) and roll the wheel: one detent = one step with a haptic tick (margin $1, leverage next option, target/stop 0.5%, close amount 5%, chart timeframe on Live position). Drag, mouse-wheel or ↑/↓. On screens without dials it scrolls the LCD. |
 
-All keys travel down on press and buzz (`navigator.vibrate`) on supported phones. "Powered by dreamDEX" is printed under the deck.
+All keys travel down on press and buzz (`navigator.vibrate`) on supported phones. Sound effects (`lib/sound.ts`, synthesized with Web Audio) play on every button press, on each wheel detent, when a trade opens, and when it closes (a rising arpeggio on profit, falling notes on a loss). "Powered by dreamDEX" is printed under the deck.
 
 ## 2. Material / elevation tokens
 

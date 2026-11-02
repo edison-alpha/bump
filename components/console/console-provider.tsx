@@ -29,6 +29,8 @@ type ConsoleContextValue = {
   activeDial: DialEntry | null;
   activeDialId: string | null;
   activateDial: (id: string) => void;
+  /** Selects the next dial on screen (wraps around). */
+  cycleDial: () => void;
   registerDial: (entry: DialEntry) => () => void;
 };
 
@@ -51,6 +53,12 @@ export function ConsoleProvider({ children }: { children: ReactNode }) {
   // The first dial on a screen is selected by default; fall back when the active one unmounts.
   const activeDial = dials.find((d) => d.id === activeDialId) ?? dials[0] ?? null;
 
+  const cycleDial = useCallback(() => {
+    if (dials.length < 2) return;
+    const i = dials.findIndex((d) => d.id === activeDial?.id);
+    setActiveDialId(dials[(i + 1) % dials.length].id);
+  }, [dials, activeDial]);
+
   const value = useMemo(
     () => ({
       screenEl,
@@ -60,9 +68,10 @@ export function ConsoleProvider({ children }: { children: ReactNode }) {
       activeDial,
       activeDialId: activeDial?.id ?? null,
       activateDial: setActiveDialId,
+      cycleDial,
       registerDial,
     }),
-    [screenEl, slot, registerAction, activeDial, registerDial],
+    [screenEl, slot, registerAction, activeDial, cycleDial, registerDial],
   );
   return <ConsoleContext.Provider value={value}>{children}</ConsoleContext.Provider>;
 }

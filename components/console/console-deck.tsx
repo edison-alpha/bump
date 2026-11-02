@@ -5,6 +5,7 @@ import { useEffect } from "react";
 import { cn } from "@/lib/cn";
 import { PoweredBy } from "@/components/shell/powered-by";
 import { useSession } from "@/modules/session/session-provider";
+import { useTrade } from "@/modules/trade/trade-provider";
 import { ActionKey } from "./action-key";
 import { useConsole } from "./console-provider";
 import { Keycap } from "./keycap";
@@ -28,6 +29,7 @@ export function ConsoleDeck() {
   const pathname = usePathname();
   const { session } = useSession();
   const { action } = useConsole();
+  const { position } = useTrade();
   const signedIn = session.status !== "signed-out";
   const next = action?.current ?? null;
 
@@ -49,7 +51,7 @@ export function ConsoleDeck() {
   });
 
   return (
-    <div className="shrink-0 px-4 pt-0.5 pb-[max(0.375rem,env(safe-area-inset-bottom))]">
+    <div className="shrink-0 px-4 pt-0.5 pb-[max(0.375rem,calc(env(safe-area-inset-bottom)-14px))]">
       <div className="flex items-stretch gap-3">
         <div className="flex flex-1 flex-col gap-2.5">
           <div className="grid grid-cols-2 gap-2.5">
@@ -84,7 +86,8 @@ export function ConsoleDeck() {
                   tone={active ? "pillOn" : "pill"}
                   aria-current={active ? "page" : undefined}
                   disabled={!signedIn}
-                  onClick={() => router.push(href)}
+                  // with a trade running, TRADE goes straight to it instead of the market list
+                  onClick={() => router.push(href === "/markets" && position ? "/position" : href)}
                   className="h-8 w-full rounded-full pl-4 text-[11px] tracking-[0.06em] uppercase"
                 >
                   <span

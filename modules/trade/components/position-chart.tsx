@@ -2,6 +2,8 @@ import { usd } from "@/lib/format";
 
 type PositionChartProps = {
   series: number[];
+  /** Time at the left edge, e.g. "5 min ago". */
+  startLabel?: string;
   entry: number;
   target: number;
   stop: number;
@@ -17,7 +19,7 @@ const LINES = [
 const NOW_X = 62;
 
 /** Price line up to "Now" with target / entry / stop guides; grows to fill the LCD. Labels are HTML so text stays crisp. */
-export function PositionChart({ series, entry, target, stop }: PositionChartProps) {
+export function PositionChart({ series, startLabel, entry, target, stop }: PositionChartProps) {
   const levels = { target, entry, stop };
   const all = [...series, target, stop];
   const max = Math.max(...all);
@@ -71,6 +73,7 @@ export function PositionChart({ series, entry, target, stop }: PositionChartProp
       <span className="absolute -bottom-1 -translate-x-1/2 font-display text-[13px] font-semibold text-cyan" style={{ left: `${NOW_X}%` }}>
         Now
       </span>
+      {startLabel && <span className="absolute -bottom-1 left-0 font-display text-[12px] text-white/60">{startLabel}</span>}
 
       {LINES.map(({ key, label, color, value }) => (
         <span key={key}>

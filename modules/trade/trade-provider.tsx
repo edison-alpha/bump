@@ -3,6 +3,7 @@
 import { createContext, useCallback, useContext, useMemo, type ReactNode } from "react";
 import { round2 } from "@/lib/format";
 import { newId } from "@/lib/id";
+import { sfx } from "@/lib/sound";
 import { useLocalStorageState } from "@/lib/use-local-storage-state";
 import { unrealizedPnl } from "./calc";
 import type { ClosedTrade, Draft, Position } from "./types";
@@ -43,13 +44,16 @@ export function TradeProvider({ children }: { children: ReactNode }) {
   );
 
   const openPosition = useCallback(
-    (entry: number) =>
+    (entry: number) => {
+      if (state.position) return;
+      sfx.open();
       setState((s) =>
         s.position
           ? s
           : { ...s, position: { ...s.draft, id: newId(), entry, openedAt: Date.now() } },
-      ),
-    [setState],
+      );
+    },
+    [state.position, setState],
   );
 
   const updateLimits = useCallback(
@@ -75,6 +79,7 @@ export function TradeProvider({ children }: { children: ReactNode }) {
         pnl: unrealizedPnl({ ...position, margin: closedMargin }, position.entry, exit),
         closedAt: Date.now(),
       };
+      sfx.close(receipt.pnl);
       setState((s) => ({
         ...s,
         position: fraction >= 1 ? null : { ...position, margin: round2(position.margin - closedMargin) },

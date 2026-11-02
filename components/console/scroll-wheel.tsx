@@ -1,26 +1,32 @@
 "use client";
 
 import { useRef, useState } from "react";
+import { sfx } from "@/lib/sound";
 import { useConsole } from "./console-provider";
 
 const RIB_DEG = 20; // angle between ribs on the cylinder; one detent turns exactly one rib
 const DETENT_PX = 16; // drag distance per detent
 const SCROLL_GAIN = 2.4; // LCD px scrolled per px dragged (no dial)
 const RIB_MAX = 9; // rib thickness (px) when facing the viewer
+const TAP_SLOP_PX = 6; // less movement than this between down and up counts as a tap, not a roll
+const TAP_MS = 350;
 
 /**
  * A real thumbwheel: a ribbed cylinder in a recessed slot. Ribs are projected onto the cylinder
  * (thin + dark near the edges, thick + lit in the middle) so it visibly rolls.
- * With a dial selected on screen it turns that value one detent at a time; otherwise it scrolls the LCD.
+ * With a dial selected on screen it turns that value one detent at a time and a tap moves to the next dial;
+ * otherwise it scrolls the LCD.
  */
 export function ScrollWheel() {
-  const { screenEl, activeDial } = useConsole();
+  const { screenEl, activeDial, cycleDial } = useConsole();
   const [angle, setAngle] = useState(0);
-  const drag = useRef<{ y: number; acc: number } | null>(null);
+  const drag = useRef<{ y: number; acc: number; moved: number; at: number } | null>(null);
+  const scrollAcc = useRef(0);
 
   const tick = (dir: 1 | -1) => {
     activeDial?.ref.current.onStep(dir);
     navigator.vibrate?.(4);
+    sfx.tick();
   };
 
   const stepOnce = (dir: 1 | -1) => {
@@ -31,6 +37,12 @@ export function ScrollWheel() {
   const scroll = (dy: number) => {
     screenEl?.scrollBy({ top: dy });
     setAngle((a) => a - (dy / SCROLL_GAIN) * (RIB_DEG / DETENT_PX));
+    // click once per rib that rolls past, same as a detent when driving a dial
+    scrollAcc.current += dy;
+    if (Math.abs(scrollAcc.current) >= DETENT_PX * SCROLL_GAIN) {
+      scrollAcc.current %= DETENT_PX * SCROLL_GAIN;
+      sfx.tick();
+    }
   };
 
   // Visible ribs on the front half of the cylinder (-90°..90°).
@@ -39,7 +51,15 @@ export function ScrollWheel() {
     (deg) => deg > -88 && deg < 88,
   );
 
-  const label = activeDial ? `Adjust ${activeDial.ref.current.label}` : "Scroll screen";
+  /** Tapping the wheel (pressing it in, like a mouse wheel click) jumps to the next value on screen. */
+  const press = () => {
+    if (!activeDial) return;
+    cycleDial();
+    sfx.click();
+    navigator.vibrate?.(8);
+  };
+
+  const label = activeDial ? `Adjust ${activeDial.ref.current.label}. Tap or press Enter for the next value` : "Scroll screen";
 
   return (
     <div className="relative">
@@ -53,12 +73,13 @@ export function ScrollWheel() {
           tabIndex={0}
           onPointerDown={(e) => {
             e.currentTarget.setPointerCapture(e.pointerId);
-            drag.current = { y: e.clientY, acc: 0 };
+            drag.current = { y: e.clientY, acc: 0, moved: 0, at: e.timeStamp };
           }}
           onPointerMove={(e) => {
             if (!drag.current) return;
             const dy = e.clientY - drag.current.y;
             drag.current.y = e.clientY;
+            drag.current.moved += Math.abs(dy);
             if (!activeDial) return scroll(-dy * SCROLL_GAIN);
             setAngle((a) => a - dy * (RIB_DEG / DETENT_PX));
             drag.current.acc -= dy;
@@ -68,10 +89,18 @@ export function ScrollWheel() {
               tick(dir);
             }
           }}
-          onPointerUp={() => (drag.current = null)}
+          onPointerUp={(e) => {
+            const d = drag.current;
+            drag.current = null;
+            if (d && d.moved < TAP_SLOP_PX && e.timeStamp - d.at < TAP_MS) press();
+          }}
           onPointerCancel={() => (drag.current = null)}
           onWheel={(e) => (activeDial ? stepOnce(e.deltaY < 0 ? 1 : -1) : scroll(e.deltaY))}
           onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              return press();
+            }
             if (e.key !== "ArrowUp" && e.key !== "ArrowDown") return;
             e.preventDefault();
             const dir = e.key === "ArrowUp" ? 1 : -1;
