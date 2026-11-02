@@ -11,7 +11,7 @@ import { CoinIcon } from "@/components/ui/coin-icon";
 import { InfoTip } from "@/components/ui/info-tip";
 import { Segmented } from "@/components/ui/segmented";
 import { StatRow } from "@/components/ui/stat-row";
-import { round2, signedUsd, usd } from "@/lib/format";
+import { round2, signedUsd, usd, usdPrice } from "@/lib/format";
 import { useMarket } from "@/modules/market/price-provider";
 import { positionSize, stepClosePct, unrealizedPnl } from "../calc";
 import { SideChip } from "../components/trade-header";
@@ -50,7 +50,7 @@ export function ClosePositionScreen() {
       <div className="flex items-end">
         <div className="flex-1">
           <p className="text-[14px]">Entry price</p>
-          <p className="text-pop font-display text-[26px] leading-tight font-bold tabular-nums">{usd(position.entry)}</p>
+          <p className="text-pop font-display text-[26px] leading-tight font-bold tabular-nums">{usdPrice(position.entry)}</p>
         </div>
         <div className="border-l border-white/25 pl-4">
           <p className="text-[14px]">Leverage</p>
@@ -73,7 +73,8 @@ export function ClosePositionScreen() {
         id="close-amount"
         label="Close amount"
         onStep={(dir) => setPercent((p) => stepClosePct(p, dir))}
-        className="-mx-1 flex flex-col gap-1.5 p-1"
+        readout={{ tag: "CLOSE", value: `${percent}%`, sub: signedUsd(grossProfit), tone: grossProfit >= 0 ? "positive" : "negative" }}
+        className="flex flex-col gap-1.5"
       >
         <h2 className="flex items-baseline justify-between font-display text-[16px] font-semibold">
           Close amount
@@ -89,7 +90,7 @@ export function ClosePositionScreen() {
       </DialField>
 
       <Card className="divide-y divide-white/15 px-3">
-        <StatRow label="Estimated exit price" value={usd(market.price)} />
+        <StatRow label="Estimated exit price" value={usdPrice(market.price)} />
         <StatRow
           label={
             <>

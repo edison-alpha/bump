@@ -2,13 +2,13 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { usePrimaryAction } from "@/components/console/console-provider";
+import { useDial, usePrimaryAction, useSideKeys } from "@/components/console/console-provider";
 import { Screen } from "@/components/shell/screen";
-import { Button } from "@/components/ui/button";
 import { Clouds } from "@/components/ui/decor";
 import { Icon } from "@/components/ui/icon";
 import { Mascot } from "@/components/ui/mascot";
 import { SpeechBubble } from "@/components/ui/speech-bubble";
+import { signedPct, usdPriceShort } from "@/lib/format";
 import { MarketRow } from "@/modules/market/components/market-row";
 import { useMarkets } from "@/modules/market/price-provider";
 import { useTrade } from "../trade-provider";
@@ -27,6 +27,19 @@ export function PickMarketScreen() {
     router.push("/trade/build");
   };
   usePrimaryAction({ label: `Build a ${draft.side} trade`, href: "/trade/build" });
+  // SELL / BUY on the hardware keys pick the direction and go on; the wheel picks the market
+  useSideKeys({ selected: null, onPress: (key) => choose(key === "buy" ? "long" : "short") });
+  const selected = markets.find((m) => m.id === draft.marketId) ?? markets[0];
+  useDial("market", {
+    label: "Market",
+    onStep: (dir) => {
+      const list = filtered.length ? filtered : markets;
+      const i = list.findIndex((m) => m.id === draft.marketId);
+      const nextMarket = list[Math.min(list.length - 1, Math.max(0, i - dir))];
+      patchDraft({ marketId: nextMarket.id });
+    },
+    readout: { tag: selected.symbol, value: signedPct(selected.change, 1), sub: usdPriceShort(selected.price), tone: selected.change >= 0 ? "positive" : "negative" },
+  });
 
   return (
     <Screen title="Pick your market">
@@ -53,27 +66,10 @@ export function PickMarketScreen() {
         <Clouds className="absolute inset-x-0 bottom-0 h-10" />
         <Mascot size={112} sparkles="left" className="relative" />
         <SpeechBubble className="relative">
-          Which way do you
+          Which way will it go?
           <br />
-          think it will go?
+          <span className="text-coral-deep">SELL</span> if down, <span className="text-mint-deep">BUY</span> if up.
         </SpeechBubble>
-      </div>
-
-      <div className="grid grid-cols-2 gap-2">
-        <Button variant="long" size="lg" className="h-[60px] justify-start gap-2 rounded-[14px] px-2.5" onClick={() => choose("long")}>
-          <Icon name="up" size={30} className="text-[#0f7a4f]" />
-          <span className="text-left leading-tight">
-            <span className="block text-[17px]">Up / Long</span>
-            <span className="block font-sans text-[11px] font-semibold">Profit if price rises</span>
-          </span>
-        </Button>
-        <Button variant="short" size="lg" className="h-[60px] justify-start gap-2 rounded-[14px] px-2.5" onClick={() => choose("short")}>
-          <Icon name="down-right" size={28} className="text-[#c42a42]" />
-          <span className="text-left leading-tight">
-            <span className="block text-[17px]">Down / Short</span>
-            <span className="block font-sans text-[11px] font-semibold">Profit if price falls</span>
-          </span>
-        </Button>
       </div>
     </Screen>
   );

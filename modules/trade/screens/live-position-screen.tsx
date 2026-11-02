@@ -2,8 +2,7 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { usePrimaryAction } from "@/components/console/console-provider";
-import { DialField } from "@/components/console/dial-field";
+import { useDial, usePrimaryAction } from "@/components/console/console-provider";
 import { Screen } from "@/components/shell/screen";
 import { Icon } from "@/components/ui/icon";
 import { Card } from "@/components/ui/card";
@@ -11,10 +10,9 @@ import { Chip } from "@/components/ui/chip";
 import { CoinIcon } from "@/components/ui/coin-icon";
 import { InfoTip } from "@/components/ui/info-tip";
 import { Mascot } from "@/components/ui/mascot";
-import { Segmented } from "@/components/ui/segmented";
 import { cn } from "@/lib/cn";
-import { signedPct, signedUsd, usd } from "@/lib/format";
-import { MAX_TICKS, TICK_MS, useMarket, useSeries } from "@/modules/market/price-provider";
+import { signedPct, signedUsd, usd, usdPrice } from "@/lib/format";
+import { useMarket, useSeries } from "@/modules/market/price-provider";
 import { pnlOnMarginPct, priceMovePct, stopPrice, targetPrice, unrealizedPnl } from "../calc";
 import { PositionChart } from "../components/position-chart";
 import { SideChip } from "../components/trade-header";
@@ -29,29 +27,67 @@ function LiveChip() {
   );
 }
 
-const TIMEFRAMES = [
-  { value: "1m", label: "1m", ago: "1 min ago", ms: 60_000 },
-  { value: "5m", label: "5m", ago: "5 min ago", ms: 300_000 },
-  { value: "15m", label: "15m", ago: "15 min ago", ms: 900_000 },
-  { value: "1h", label: "1h", ago: "1 hour ago", ms: 3_600_000 },
-] as const;
+const S = 1000;
+const MIN = 60 * S;
+const HOUR = 60 * MIN;
+const DAY = 24 * HOUR;
 
-type Timeframe = (typeof TIMEFRAMES)[number]["value"];
+/** Chart timeframes as on TradingView: one point per interval, CHART_POINTS on screen. Picked with the wheel. */
+const TIMEFRAMES = [
+  { label: "1s", ms: S },
+  { label: "5s", ms: 5 * S },
+  { label: "15s", ms: 15 * S },
+  { label: "30s", ms: 30 * S },
+  { label: "1m", ms: MIN },
+  { label: "3m", ms: 3 * MIN },
+  { label: "5m", ms: 5 * MIN },
+  { label: "15m", ms: 15 * MIN },
+  { label: "30m", ms: 30 * MIN },
+  { label: "1h", ms: HOUR },
+  { label: "2h", ms: 2 * HOUR },
+  { label: "4h", ms: 4 * HOUR },
+  { label: "1D", ms: DAY },
+  { label: "1W", ms: 7 * DAY },
+  { label: "1M", ms: 30 * DAY },
+] as const;
+const CHART_POINTS = 60;
+
+type Timeframe = (typeof TIMEFRAMES)[number]["label"];
+
+/** How far back the chart's left edge is, e.g. "5 hours ago". */
+function agoLabel(ms: number) {
+  const units = [
+    { ms: 365 * DAY, name: "year" },
+    { ms: 30 * DAY, name: "month" },
+    { ms: 7 * DAY, name: "week" },
+    { ms: DAY, name: "day" },
+    { ms: HOUR, name: "hour" },
+    { ms: MIN, name: "min" },
+  ];
+  const unit = units.find((u) => ms >= u.ms) ?? units[units.length - 1];
+  const n = Math.round(ms / unit.ms);
+  return `${n} ${unit.name}${n > 1 && unit.name !== "min" ? "s" : ""} ago`;
+}
 
 export function LivePositionScreen() {
   const position = useRequirePosition();
   const market = useMarket(position?.marketId ?? "btc");
-  const [timeframe, setTimeframe] = useState<Timeframe>("5m");
-  const frame = TIMEFRAMES.find((t) => t.value === timeframe) ?? TIMEFRAMES[0];
-  const series = useSeries(market.id, Math.min(MAX_TICKS, frame.ms / TICK_MS));
+  const [timeframe, setTimeframe] = useState<Timeframe>("1s");
+  const frame = TIMEFRAMES.find((t) => t.label === timeframe) ?? TIMEFRAMES[0];
+  const series = useSeries(market.id, frame.ms, CHART_POINTS);
   usePrimaryAction(position ? { label: "Close position", href: "/position/close" } : null);
 
   // wheel up = zoom out to a longer timeframe
   const stepTimeframe = (dir: 1 | -1) =>
     setTimeframe((tf) => {
-      const i = TIMEFRAMES.findIndex((t) => t.value === tf);
-      return TIMEFRAMES[Math.min(TIMEFRAMES.length - 1, Math.max(0, i + dir))].value;
+      const i = TIMEFRAMES.findIndex((t) => t.label === tf);
+      return TIMEFRAMES[Math.min(TIMEFRAMES.length - 1, Math.max(0, i + dir))].label;
     });
+  useDial("timeframe", {
+    label: "Chart timeframe",
+    onStep: stepTimeframe,
+    readout: { tag: "CHART", value: frame.label, sub: agoLabel(frame.ms * CHART_POINTS).replace(" ago", "") },
+  });
   if (!position) return <Screen title="Your position">{null}</Screen>;
 
   const pnl = unrealizedPnl(position, position.entry, market.price);
@@ -68,7 +104,7 @@ export function LivePositionScreen() {
             <Chip className="text-[13px]">{position.leverage}x</Chip>
           </div>
           <div className="flex items-baseline gap-2">
-            <span className="text-pop font-display text-[28px] leading-tight font-bold tabular-nums">{usd(market.price)}</span>
+            <span className="text-pop font-display text-[28px] leading-tight font-bold tabular-nums">{usdPrice(market.price)}</span>
             <span className={cn("font-display text-[17px] font-semibold", tone)}>
               {signedPct(priceMovePct(position.side, position.entry, market.price), 1)}
             </span>
@@ -83,19 +119,9 @@ export function LivePositionScreen() {
         </Link>
       </div>
 
-      <DialField id="timeframe" label="Chart timeframe" onStep={stepTimeframe} quiet>
-        <Segmented
-          tone="group"
-          label="Chart timeframe"
-          options={TIMEFRAMES.map(({ value, label }) => ({ value, label }))}
-          value={timeframe}
-          onChange={setTimeframe}
-        />
-      </DialField>
-
       <PositionChart
         series={series}
-        startLabel={frame.ago}
+        startLabel={`${frame.label} · ${agoLabel(frame.ms * CHART_POINTS)}`}
         entry={position.entry}
         target={targetPrice(position.entry, position)}
         stop={stopPrice(position.entry, position)}

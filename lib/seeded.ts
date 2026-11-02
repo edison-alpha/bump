@@ -1,3 +1,5 @@
+import { roundPrice } from "./format";
+
 /** Deterministic PRNG (mulberry32) so sample data renders identically on server and client. */
 export function seeded(seed: number) {
   let a = seed;
@@ -18,5 +20,5 @@ export function makeSeries(seed: number, last: number, length = 40, volatility =
     raw.push(raw[i - 1] * (1 + (rand() - 0.5) * volatility * 2 + trend));
   }
   const scale = last / raw[length - 1];
-  return raw.map((v) => Math.round(v * scale * 100) / 100);
+  return raw.map((v) => roundPrice(v * scale));
 }

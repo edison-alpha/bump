@@ -141,15 +141,6 @@ export function ScrollWheel() {
           />
         </div>
       </div>
-      {/* LED: lit when the wheel is driving a value */}
-      <span
-        aria-hidden
-        className={
-          activeDial
-            ? "absolute -top-2.5 left-1/2 size-1.5 -translate-x-1/2 rounded-full bg-cyan shadow-[0_0_6px_#4cc9ff]"
-            : "absolute -top-2.5 left-1/2 size-1.5 -translate-x-1/2 rounded-full bg-white/25"
-        }
-      />
     </div>
   );
 }

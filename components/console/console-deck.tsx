@@ -20,6 +20,25 @@ const MODES = [
 const isTyping = (el: EventTarget | null) =>
   el instanceof HTMLElement && (el.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(el.tagName));
 
+/** Corner LED of a SELL / BUY key: dim in its color, bright when that side is picked. */
+function SideLed({ on, tone }: { on: boolean; tone: "sell" | "buy" }) {
+  return (
+    <span
+      aria-hidden
+      className={cn(
+        "absolute top-2 right-2.5 size-1.5 rounded-full",
+        tone === "buy"
+          ? on
+            ? "bg-mint shadow-[0_0_6px_#3fe0a6]"
+            : "bg-mint/25"
+          : on
+            ? "bg-coral shadow-[0_0_6px_#ff6377]"
+            : "bg-coral/25",
+      )}
+    />
+  );
+}
+
 /**
  * The hardware half of the console: PREV / NEXT keys, mode keys, the mascot action key and the
  * scroll wheel. Replaces a web tab bar.
@@ -28,10 +47,11 @@ export function ConsoleDeck() {
   const router = useRouter();
   const pathname = usePathname();
   const { session } = useSession();
-  const { action } = useConsole();
+  const { action, sideKeys } = useConsole();
   const { position } = useTrade();
   const signedIn = session.status !== "signed-out";
   const next = action?.current ?? null;
+  const sides = sideKeys?.current ?? null;
 
   const pressNext = () => {
     const a = action?.current;
@@ -40,11 +60,15 @@ export function ConsoleDeck() {
     else if (a.href) router.push(a.href);
   };
 
+  // with SELL / BUY on the keys, left = sell and right = buy
+  const pressLeft = () => (sideKeys?.current ? sideKeys.current.onPress("sell") : router.back());
+  const pressRight = () => (sideKeys?.current ? sideKeys.current.onPress("buy") : pressNext());
+
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (isTyping(e.target) || e.metaKey || e.ctrlKey || e.altKey) return;
-      if (e.key === "ArrowLeft") router.back();
-      if (e.key === "ArrowRight") pressNext();
+      if (e.key === "ArrowLeft") pressLeft();
+      if (e.key === "ArrowRight") pressRight();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
@@ -54,28 +78,53 @@ export function ConsoleDeck() {
     <div className="shrink-0 px-4 pt-0.5 pb-[max(0.375rem,calc(env(safe-area-inset-bottom)-14px))] in-data-short-viewport:pb-2">
       <div className="flex items-stretch gap-3">
         <div className="flex flex-1 flex-col gap-2.5">
-          <div className="grid grid-cols-2 gap-2.5">
-            <Keycap tone="dark" aria-label="Previous screen" onClick={() => router.back()} className="h-12 rounded-[13px] text-[16px]">
-              PREV
-            </Keycap>
-            <Keycap
-              tone="dark"
-              aria-label={next ? `Next: ${next.label}` : "Next"}
-              title={next?.label}
-              disabled={!next || next.disabled}
-              onClick={pressNext}
-              className="h-12 rounded-[13px] text-[16px]"
-            >
-              NEXT
-              <span
-                aria-hidden
-                className={cn(
-                  "absolute top-2 right-2.5 size-1.5 rounded-full",
-                  next && !next.disabled ? "bg-mint shadow-[0_0_6px_#3fe0a6]" : "bg-white/15",
-                )}
-              />
-            </Keycap>
-          </div>
+          {sides ? (
+            <div className="grid grid-cols-2 gap-2.5">
+              <Keycap
+                tone="dark"
+                aria-label={sides.selected === "sell" ? "Sell (short) selected. Press again to continue" : "Sell (short)"}
+                aria-pressed={sides.selected === "sell"}
+                onClick={pressLeft}
+                className={cn("h-12 rounded-[13px] text-[16px] text-[#ff8a9b]", sides.selected === "sell" && "text-[#ffb3be]")}
+              >
+                SELL
+                <SideLed on={sides.selected === "sell"} tone="sell" />
+              </Keycap>
+              <Keycap
+                tone="dark"
+                aria-label={sides.selected === "buy" ? "Buy (long) selected. Press again to continue" : "Buy (long)"}
+                aria-pressed={sides.selected === "buy"}
+                onClick={pressRight}
+                className={cn("h-12 rounded-[13px] text-[16px] text-[#5dffc0]", sides.selected === "buy" && "text-[#a6ffdc]")}
+              >
+                BUY
+                <SideLed on={sides.selected === "buy"} tone="buy" />
+              </Keycap>
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 gap-2.5">
+              <Keycap tone="dark" aria-label="Previous screen" onClick={pressLeft} className="h-12 rounded-[13px] text-[16px]">
+                PREV
+              </Keycap>
+              <Keycap
+                tone="dark"
+                aria-label={next ? `Next: ${next.label}` : "Next"}
+                title={next?.label}
+                disabled={!next || next.disabled}
+                onClick={pressRight}
+                className="h-12 rounded-[13px] text-[16px]"
+              >
+                NEXT
+                <span
+                  aria-hidden
+                  className={cn(
+                    "absolute top-2 right-2.5 size-1.5 rounded-full",
+                    next && !next.disabled ? "bg-mint shadow-[0_0_6px_#3fe0a6]" : "bg-white/15",
+                  )}
+                />
+              </Keycap>
+            </div>
+          )}
 
           <nav aria-label="Modes" className="grid grid-cols-3 gap-2">
             {MODES.map(({ href, label, match }) => {

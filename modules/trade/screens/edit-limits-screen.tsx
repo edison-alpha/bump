@@ -7,10 +7,10 @@ import { Screen } from "@/components/shell/screen";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { StatRow } from "@/components/ui/stat-row";
-import { signedUsd, usd } from "@/lib/format";
+import { signedUsd, usd, usdPrice } from "@/lib/format";
 import { DialField } from "@/components/console/dial-field";
 import { lossAtStop, profitAtTarget, stepPct, stopPrice, targetPrice } from "../calc";
-import { LimitRow } from "../components/limit-row";
+import { LimitRow, stopReadout, targetReadout } from "../components/limit-row";
 import { useTrade } from "../trade-provider";
 import { useRequirePosition } from "../use-require-position";
 
@@ -35,17 +35,27 @@ export function EditLimitsScreen() {
 
   return (
     <Screen title="Edit limits">
-      <DialField id="target" label="Profit target" onStep={(dir) => setTarget((t) => stepPct(t ?? position.targetPct, dir))}>
+      <DialField
+        id="target"
+        label="Profit target"
+        onStep={(dir) => setTarget((t) => stepPct(t ?? position.targetPct, dir))}
+        readout={targetReadout(targetPct, targetPrice(position.entry, next))}
+      >
         <LimitRow kind="target" value={targetPct} onChange={setTarget} />
       </DialField>
-      <DialField id="stop" label="Stop loss" onStep={(dir) => setStop((s) => stepPct(s ?? position.stopPct, dir, 0.5, 10))}>
+      <DialField
+        id="stop"
+        label="Stop loss"
+        onStep={(dir) => setStop((s) => stepPct(s ?? position.stopPct, dir, 0.5, 10))}
+        readout={stopReadout(stopPct, stopPrice(position.entry, next))}
+      >
         <LimitRow kind="stop" value={stopPct} onChange={setStop} />
       </DialField>
 
       <Card className="divide-y divide-white/15 px-3">
-        <StatRow label="Target price" value={usd(targetPrice(position.entry, next))} tone="positive" />
+        <StatRow label="Target price" value={usdPrice(targetPrice(position.entry, next))} tone="positive" />
         <StatRow label="Profit at target" value={signedUsd(profitAtTarget(next))} tone="positive" />
-        <StatRow label="Stop price" value={usd(stopPrice(position.entry, next))} tone="negative" />
+        <StatRow label="Stop price" value={usdPrice(stopPrice(position.entry, next))} tone="negative" />
         <StatRow label="Loss at stop" value={signedUsd(-lossAtStop(next))} tone="negative" />
       </Card>
       <p className="text-[13px] text-white/80">Before funding and costs. Stop fills can differ.</p>

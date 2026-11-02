@@ -11,6 +11,8 @@ const LOGOS: Record<string, string> = {
   BTC: "token-branded:btc",
   ETH: "token-branded:eth",
   SOL: "token-branded:sol",
+  BNB: "token-branded:bnb",
+  XRP: "token-branded:xrp",
 };
 
 type CoinIconProps = { symbol: string; size?: number; className?: string };

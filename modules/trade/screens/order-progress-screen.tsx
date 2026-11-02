@@ -1,5 +1,6 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { usePrimaryAction } from "@/components/console/console-provider";
 import { Icon } from "@/components/ui/icon";
@@ -21,6 +22,8 @@ const STEPS = [
 
 /** Mock order lifecycle: each step resolves on a timer, the last one opens the position. */
 const STEP_DELAYS_MS = [700, 1500, 3200];
+/** How long "Your trade is live!" stays up before the position screen takes over. */
+const LIVE_HOLD_MS = 900;
 
 function StepMark({ state }: { state: "done" | "active" | "todo" }) {
   if (state === "done") {
@@ -41,6 +44,7 @@ function StepMark({ state }: { state: "done" | "active" | "todo" }) {
 }
 
 export function OrderProgressScreen() {
+  const router = useRouter();
   const { draft, position, openPosition, ready } = useTrade();
   const market = useMarket(draft.marketId);
   const [done, setDone] = useState(0);
@@ -59,6 +63,13 @@ export function OrderProgressScreen() {
       openPosition(market.price);
     }
   }, [done, ready, openPosition, market.price]);
+
+  // filled: go straight to the live position (replace, so Back doesn't land on this screen again)
+  useEffect(() => {
+    if (!filled) return;
+    const id = setTimeout(() => router.replace("/position"), LIVE_HOLD_MS);
+    return () => clearTimeout(id);
+  }, [filled, router]);
 
   return (
     <Screen title="Order progress">
@@ -97,14 +108,9 @@ export function OrderProgressScreen() {
         Your position opens only when the order fills.
       </p>
 
-      <div className="mt-auto flex flex-col gap-2">
-        <Button href="/position" size="lg" disabled={!filled} trailing={<Icon name="next" size={24} />}>
-          View order
-        </Button>
-        <Button variant="light" size="sm" leading={<Icon name="help" size={20} />}>
-          Need help?
-        </Button>
-      </div>
+      <Button variant="light" size="sm" className="mt-auto" leading={<Icon name="help" size={20} />}>
+        Need help?
+      </Button>
     </Screen>
   );
 }

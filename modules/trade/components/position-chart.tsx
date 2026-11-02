@@ -1,4 +1,4 @@
-import { usd } from "@/lib/format";
+import { usdPrice } from "@/lib/format";
 
 type PositionChartProps = {
   series: number[];
@@ -87,7 +87,7 @@ export function PositionChart({ series, startLabel, entry, target, stop }: Posit
           >
             {label}
             <span className="block font-semibold" style={{ color: value }}>
-              {usd(levels[key])}
+              {usdPrice(levels[key])}
             </span>
           </span>
         </span>

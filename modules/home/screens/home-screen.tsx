@@ -11,22 +11,17 @@ import { CoinStack } from "@/components/ui/coin-stack";
 import { InfoTip } from "@/components/ui/info-tip";
 import { Mascot } from "@/components/ui/mascot";
 import { SpeechBubble } from "@/components/ui/speech-bubble";
-import { cn } from "@/lib/cn";
-import { signedUsd, usd } from "@/lib/format";
-import { getLeaderboard } from "@/modules/leaderboard/data";
+import { usd } from "@/lib/format";
 import { MarketRow } from "@/modules/market/components/market-row";
 import { useMarkets } from "@/modules/market/price-provider";
 import { useSession } from "@/modules/session/session-provider";
 import { useTrade } from "@/modules/trade/trade-provider";
-
-const MEDAL = ["from-[#ffe48a] to-[#f0a800]", "from-[#e8f4ff] to-[#9cc8ec]", "from-[#ffd0b0] to-[#ee8a52]"];
 
 export function HomeScreen() {
   const { session } = useSession();
   const { balance, position } = useTrade();
   const markets = useMarkets();
   const name = session.name || "there";
-  const leaders = getLeaderboard("wins", "week", null).slice(0, 3);
   usePrimaryAction(position ? { label: "View live position", href: "/position" } : { label: "Start trading", href: "/markets" });
 
   return (
@@ -79,34 +74,6 @@ export function HomeScreen() {
         </div>
         <Icon name="chevron" size={22} />
       </LightCard>
-
-      <Card className="px-2.5 py-1.5">
-        <div className="mb-1 flex items-center justify-between">
-          <h2 className="font-display text-[15px] font-semibold">This week’s leaders</h2>
-          <Link href="/leaderboard" className="inline-flex items-center gap-1 font-display text-[13px] font-semibold text-cyan">
-            View all <Icon name="next" size={16} />
-          </Link>
-        </div>
-        <ul className="grid grid-cols-3 gap-1">
-          {leaders.map((l, i) => (
-            <li key={l.id} className="flex items-center gap-1.5">
-              <span
-                className={cn(
-                  "grid size-5 shrink-0 place-items-center rounded-full bg-linear-to-b font-display text-[11px] font-bold text-navy-900",
-                  MEDAL[i],
-                )}
-              >
-                {l.rank}
-              </span>
-              <Avatar seed={l.name} size={26} />
-              <span className="min-w-0 text-[11px] leading-tight">
-                <span className="block truncate font-semibold">{l.name}</span>
-                <span className="font-bold text-mint tabular-nums">{signedUsd(l.value)}</span>
-              </span>
-            </li>
-          ))}
-        </ul>
-      </Card>
     </Screen>
   );
 }

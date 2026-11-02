@@ -1,7 +1,7 @@
 import { Sparkline } from "@/components/ui/sparkline";
 import { CoinIcon } from "@/components/ui/coin-icon";
 import { cn } from "@/lib/cn";
-import { signedPct, usd } from "@/lib/format";
+import { signedPct, usd, usdPrice } from "@/lib/format";
 import type { LiveMarket } from "../types";
 
 type MarketRowProps = {
@@ -26,7 +26,7 @@ export function MarketRow({ market, variant = "picker", selected = false, onSele
         <CoinIcon symbol={market.symbol} size={32} />
         <span className="min-w-0 flex-1">
           <span className="block text-[12px] leading-tight font-semibold">{market.name}</span>
-          <span className="block font-display text-[16px] leading-tight font-bold tabular-nums">{usd(market.price)}</span>
+          <span className="block font-display text-[16px] leading-tight font-bold tabular-nums">{usdPrice(market.price)}</span>
         </span>
         <Sparkline data={market.series} className="h-7 w-[68px]" />
         <span
@@ -56,7 +56,7 @@ export function MarketRow({ market, variant = "picker", selected = false, onSele
       </span>
       <Sparkline data={market.series} className="h-8 w-[70px]" />
       <span className="text-right">
-        <span className="block font-display text-[15px] font-semibold tabular-nums">{usd(market.price)}</span>
+        <span className="block font-display text-[15px] font-semibold tabular-nums">{usdPrice(market.price)}</span>
         <span className={cn("block font-display text-[15px] font-bold tabular-nums", up ? "text-mint" : "text-coral")}>
           {signedPct(market.change)}
         </span>

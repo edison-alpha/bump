@@ -2,7 +2,7 @@ import { Card } from "@/components/ui/card";
 import { Chip } from "@/components/ui/chip";
 import { CoinIcon } from "@/components/ui/coin-icon";
 import { Sparkline } from "@/components/ui/sparkline";
-import { signedPct, usd } from "@/lib/format";
+import { signedPct, usd, usdPrice } from "@/lib/format";
 import type { LiveMarket } from "@/modules/market/types";
 import type { Side } from "../types";
 
@@ -21,7 +21,7 @@ export function TradeHeader({ market, side, leverage }: TradeHeaderProps) {
           <Chip className="text-[13px]">{leverage}x</Chip>
         </div>
         <div className="flex items-baseline gap-2">
-          <span className="font-display text-[16px] font-semibold tabular-nums">{usd(market.price)}</span>
+          <span className="font-display text-[16px] font-semibold tabular-nums">{usdPrice(market.price)}</span>
           <span className={up ? "font-display text-[13px] font-semibold text-mint" : "font-display text-[13px] font-semibold text-coral"}>
             {signedPct(market.change)}
           </span>

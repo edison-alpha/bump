@@ -4,6 +4,8 @@ import { useState } from "react";
 import { cn } from "@/lib/cn";
 import { Icon } from "@/components/ui/icon";
 import { Segmented } from "@/components/ui/segmented";
+import type { Readout } from "@/components/console/console-provider";
+import { usdPriceShort } from "@/lib/format";
 import { STOP_PRESETS, TARGET_PRESETS } from "../calc";
 
 type LimitRowProps = {
@@ -52,3 +54,18 @@ export function LimitRow({ kind, value, onChange }: LimitRowProps) {
     </div>
   );
 }
+
+/** Mini LCD readouts: the percent being dialled and the price it triggers at. */
+export const targetReadout = (pct: number, price: number): Readout => ({
+  tag: "TP",
+  value: `+${pct.toFixed(1)}%`,
+  sub: usdPriceShort(price),
+  tone: "positive",
+});
+
+export const stopReadout = (pct: number, price: number): Readout => ({
+  tag: "SL",
+  value: `-${pct.toFixed(1)}%`,
+  sub: usdPriceShort(price),
+  tone: "negative",
+});

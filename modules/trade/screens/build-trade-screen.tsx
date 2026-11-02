@@ -1,12 +1,11 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useRef, useState } from "react";
-import { usePrimaryAction } from "@/components/console/console-provider";
+import { usePrimaryAction, useSideKeys } from "@/components/console/console-provider";
 import { DialField } from "@/components/console/dial-field";
 import { Screen } from "@/components/shell/screen";
-import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { Icon } from "@/components/ui/icon";
 import { InfoTip } from "@/components/ui/info-tip";
 import { Segmented } from "@/components/ui/segmented";
 import { signedUsd, usd } from "@/lib/format";
@@ -20,20 +19,33 @@ import {
   stepMargin,
   stepOption,
   stepPct,
+  stopPrice,
+  targetPrice,
 } from "../calc";
-import { LimitRow } from "../components/limit-row";
+import { KeyHint } from "../components/key-hint";
+import { LimitRow, stopReadout, targetReadout } from "../components/limit-row";
 import { TradeHeader } from "../components/trade-header";
 import { useTrade } from "../trade-provider";
 
 type Leverage = (typeof LEVERAGE_OPTIONS)[number];
 
 export function BuildTradeScreen() {
+  const router = useRouter();
   const { draft, patchDraft } = useTrade();
   const market = useMarket(draft.marketId);
   const isPreset = (MARGIN_PRESETS as readonly number[]).includes(draft.margin);
   const marginRef = useRef<HTMLInputElement>(null);
   const [marginText, setMarginText] = useState<string | null>(null);
   usePrimaryAction({ label: "Review trade", href: "/trade/review", disabled: draft.margin <= 0 });
+  // the other side's key flips the direction; the picked side's key goes on to Review
+  useSideKeys({
+    selected: draft.side === "long" ? "buy" : "sell",
+    onPress: (key) => {
+      const side = key === "buy" ? "long" : "short";
+      if (side !== draft.side) patchDraft({ side });
+      else if (draft.margin > 0) router.push("/trade/review");
+    },
+  });
 
   return (
     <Screen title="Build trade">
@@ -48,7 +60,8 @@ export function BuildTradeScreen() {
           setMarginText(null); // show the dialled value even while the field has focus
           patchDraft((d) => ({ margin: stepMargin(d.margin, dir) }));
         }}
-        className="-mx-1 flex flex-col gap-1.5 p-1"
+        readout={{ tag: "MARGIN", value: usd(draft.margin) }}
+        className="flex flex-col gap-1.5"
       >
         <div className="flex items-center justify-between">
           <span className="flex items-center text-[15px]">
@@ -89,7 +102,8 @@ export function BuildTradeScreen() {
         id="leverage"
         label="Leverage"
         onStep={(dir) => patchDraft((d) => ({ leverage: stepOption(LEVERAGE_OPTIONS, d.leverage as Leverage, dir) }))}
-        className="-mx-1 flex flex-col gap-1.5 p-1"
+        readout={{ tag: "LEV", value: `${draft.leverage}x` }}
+        className="flex flex-col gap-1.5"
       >
         <span className="flex items-center text-[15px]">
           Leverage
@@ -105,10 +119,20 @@ export function BuildTradeScreen() {
         />
       </DialField>
 
-      <DialField id="target" label="Profit target" onStep={(dir) => patchDraft((d) => ({ targetPct: stepPct(d.targetPct, dir) }))}>
+      <DialField
+        id="target"
+        label="Profit target"
+        onStep={(dir) => patchDraft((d) => ({ targetPct: stepPct(d.targetPct, dir) }))}
+        readout={targetReadout(draft.targetPct, targetPrice(market.price, draft))}
+      >
         <LimitRow kind="target" value={draft.targetPct} onChange={(targetPct) => patchDraft({ targetPct })} />
       </DialField>
-      <DialField id="stop" label="Stop loss" onStep={(dir) => patchDraft((d) => ({ stopPct: stepPct(d.stopPct, dir, 0.5, 10) }))}>
+      <DialField
+        id="stop"
+        label="Stop loss"
+        onStep={(dir) => patchDraft((d) => ({ stopPct: stepPct(d.stopPct, dir, 0.5, 10) }))}
+        readout={stopReadout(draft.stopPct, stopPrice(market.price, draft))}
+      >
         <LimitRow kind="stop" value={draft.stopPct} onChange={(stopPct) => patchDraft({ stopPct })} />
       </DialField>
 
@@ -130,9 +154,7 @@ export function BuildTradeScreen() {
         <p className="text-center text-[11px] text-white/70">Before funding and costs.</p>
       </Card>
 
-      <Button href="/trade/review" size="lg" className="mt-auto" disabled={draft.margin <= 0} trailing={<Icon name="next" size={24} />}>
-        Review trade
-      </Button>
+      <KeyHint side={draft.side} next="review" />
     </Screen>
   );
 }

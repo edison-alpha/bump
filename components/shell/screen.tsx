@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import type { ReactNode } from "react";
 import { cn } from "@/lib/cn";
 import { useConsole } from "@/components/console/console-provider";
+import { MiniLcd, NOTCH_CLIP } from "@/components/console/mini-lcd";
 import { Icon } from "@/components/ui/icon";
 
 type ScreenProps = {
@@ -46,15 +47,16 @@ function Header({ title, back, right }: Pick<ScreenProps, "title" | "back" | "ri
 /**
  * The LCD: a recessed panel whose content scrolls inside it (the page itself never scrolls),
  * with a glass glare on top. The scroll element is handed to the console so the wheel drives it.
+ * Its bottom-right corner is notched for the mini LCD over the wheel; pb-14 keeps the last content clear of it.
  */
 function Lcd({ header, children, className }: { header?: ReactNode; children: ReactNode; className?: string }) {
   const { setScreenEl } = useConsole();
   return (
-    <section className="screen-panel relative flex min-h-0 flex-1 flex-col overflow-hidden">
+    <section className="screen-panel relative flex min-h-0 flex-1 flex-col overflow-hidden" style={{ clipPath: NOTCH_CLIP }}>
       <div
         ref={setScreenEl}
         className={cn(
-          "flex min-h-0 flex-1 touch-pan-y flex-col gap-2 overflow-y-auto overscroll-contain px-3 pt-3 pb-3 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden",
+          "flex min-h-0 flex-1 touch-pan-y flex-col gap-2 overflow-y-auto overscroll-contain px-3 pt-3 pb-14 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden",
           className,
         )}
       >
@@ -73,10 +75,12 @@ function Lcd({ header, children, className }: { header?: ReactNode; children: Re
 /** Every page is built on this: the LCD fills the bezel and holds the header, so it is the same size on every page. */
 export function Screen({ title, back = true, right, header, children, className }: ScreenProps) {
   return (
-    <div className="flex min-h-0 flex-1 flex-col px-3 pt-3 pb-2.5">
+    <div className="relative flex min-h-0 flex-1 flex-col px-3 pt-3 pb-2.5">
       <Lcd header={header ?? <Header title={title} back={back} right={right} />} className={cn("px-3.5 pt-2.5", className)}>
         {children}
       </Lcd>
+      {/* panel corner = this box's px-3 / pb-2.5 */}
+      <MiniLcd right={12} bottom={10} />
     </div>
   );
 }
