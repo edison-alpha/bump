@@ -1,8 +1,8 @@
-// Generates PWA icons from brand/Sky blue BUMP app icon-3.png. Run: pnpm icons
+// Generates PWA icons from public/brand/icon.png. Run: pnpm icons
 import { mkdir } from "node:fs/promises";
 import sharp from "sharp";
 
-const SOURCE = "brand/Sky blue BUMP app icon-3.png";
+const SOURCE = "public/brand/icon.png";
 const OUT = "public/icons";
 const SKY = { r: 61, g: 187, b: 255, alpha: 1 };
 
