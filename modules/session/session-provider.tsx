@@ -1,10 +1,11 @@
 "use client";
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { useLoginWithEmail, useLoginWithOAuth, usePrivy, useWallets } from "@privy-io/react-auth";
+import { useLogin, useLoginWithEmail, useLoginWithOAuth, usePrivy, useWallets } from "@privy-io/react-auth";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { api, ApiError } from "@/lib/api/client";
 import { qk } from "@/lib/api/query";
+import { exchange as dreamdex } from "@/lib/chain/exchange";
 import { PRIVY_CONFIGURED } from "@/lib/privy-config";
 import type { GuestImportRequest, SessionResponse, TradingAccountRequest } from "@/lib/api/types";
 import { useLocalStorageState } from "@/lib/use-local-storage-state";
@@ -15,7 +16,7 @@ export type Session = {
   name: string;
   username: string;
   showOnLeaderboard: boolean;
-  /** The member's embedded wallet; empty for guests. */
+  /** The member's wallet (embedded, or the external one they signed in with); empty for guests. */
   address: string;
   /** The dreamDEX smart account the member trades through; null means the embedded wallet trades itself. */
   tradingAccount: string | null;
@@ -38,6 +39,8 @@ type SessionContextValue = {
   verifyEmailCode: (code: string) => Promise<void>;
   /** Leaves for Google and comes back signed in. */
   signInWithGoogle: () => Promise<void>;
+  /** Opens the wallet picker (MetaMask and the like); the member session follows once connected. */
+  signInWithWallet: () => void;
   continueAsGuest: () => void;
   /** Saves name, username and visibility on the server. Throws ApiError (409 when the username is taken). */
   saveProfile: (profile: ProfileInput) => Promise<void>;
@@ -87,6 +90,7 @@ function GuestSessionProvider({ children }: { children: ReactNode }) {
         throw new Error(unavailable);
       },
       signInWithGoogle: async () => setAuthError(unavailable),
+      signInWithWallet: () => setAuthError(unavailable),
       continueAsGuest: () => setSession({ ...EMPTY, status: "guest", name: "Guest" }),
       saveProfile: async () => {
         throw new Error(unavailable);
@@ -109,6 +113,7 @@ function PrivySessionProvider({ children }: { children: ReactNode }) {
   const { wallets, ready: walletsReady } = useWallets();
   const { sendCode, loginWithCode } = useLoginWithEmail();
   const { initOAuth } = useLoginWithOAuth();
+  const { login } = useLogin();
   const queryClient = useQueryClient();
   const [authError, setAuthError] = useState<string | null>(null);
   const exchanged = useRef<string | null>(null);
@@ -217,6 +222,15 @@ function PrivySessionProvider({ children }: { children: ReactNode }) {
     }
   }, [initOAuth]);
 
+  const signInWithWallet = useCallback(() => {
+    setAuthError(null);
+    try {
+      login({ loginMethods: ["wallet"] });
+    } catch {
+      setAuthError("Couldn't open the wallet picker. Try email instead.");
+    }
+  }, [login]);
+
   // no username, so a guest who signs in later is sent to profile setup (their trades and XP stay)
   const continueAsGuest = useCallback(() => setSession({ ...EMPTY, status: "guest", name: "Guest" }), [setSession]);
 
@@ -241,6 +255,36 @@ function PrivySessionProvider({ children }: { children: ReactNode }) {
   const { mutateAsync: linkAccountAsync } = accountMutation;
   const linkTradingAccount = useCallback(async (account: string | null) => void (await linkAccountAsync(account)), [linkAccountAsync]);
 
+  // A member whose wallet owns a dreamDEX smart account trades through it, so their balance and claimed voucher are
+  // already there. Done once per wallet: after it links (or the member switches back) it never overrides their choice.
+  const autoLinking = useRef<string | null>(null);
+  useEffect(() => {
+    if (session.status !== "member" || session.tradingAccount || !session.address || autoLinking.current === session.address) return;
+    const key = `bump:autolink:${session.address.toLowerCase()}`;
+    try {
+      if (localStorage.getItem(key)) return;
+    } catch {
+      // storage blocked: look the account up each time instead
+    }
+    autoLinking.current = session.address;
+    dreamdex()
+      .client.accounts.listControlledAccounts(session.address as `0x${string}`)
+      .then(async (found) => {
+        const account = found[0]?.address;
+        if (!account) return;
+        await linkAccountAsync(account);
+        try {
+          localStorage.setItem(key, "1");
+        } catch {
+          // nothing to remember it in
+        }
+      })
+      .catch(() => {
+        // a failed lookup or link just leaves the wallet trading itself; Profile can still connect the account
+        autoLinking.current = null;
+      });
+  }, [session.status, session.tradingAccount, session.address, linkAccountAsync]);
+
   // optimistic: the toggle flips at once and flips back if the server refuses
   const visibilityMutation = useMutation({
     mutationFn: (showOnLeaderboard: boolean) => api("/api/me/prefs", { body: { showOnLeaderboard } }),
@@ -264,8 +308,8 @@ function PrivySessionProvider({ children }: { children: ReactNode }) {
   const ready = stored && privyReady && !exchange.isPending && !settling;
 
   const value = useMemo(
-    () => ({ session, ready, authError, setEmail, sendEmailCode, verifyEmailCode, signInWithGoogle, continueAsGuest, saveProfile, linkTradingAccount, setLeaderboardVisibility, signOut }),
-    [session, ready, authError, setEmail, sendEmailCode, verifyEmailCode, signInWithGoogle, continueAsGuest, saveProfile, linkTradingAccount, setLeaderboardVisibility, signOut],
+    () => ({ session, ready, authError, setEmail, sendEmailCode, verifyEmailCode, signInWithGoogle, signInWithWallet, continueAsGuest, saveProfile, linkTradingAccount, setLeaderboardVisibility, signOut }),
+    [session, ready, authError, setEmail, sendEmailCode, verifyEmailCode, signInWithGoogle, signInWithWallet, continueAsGuest, saveProfile, linkTradingAccount, setLeaderboardVisibility, signOut],
   );
 
   return <SessionContext.Provider value={value}>{children}</SessionContext.Provider>;

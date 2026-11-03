@@ -21,9 +21,10 @@ function Auth({ children }: { children: ReactNode }) {
     <PrivyProvider
       appId={PRIVY_APP_ID}
       config={{
-        loginMethods: ["email", "google"],
+        loginMethods: ["email", "google", "wallet"],
         appearance: { theme: "dark", accentColor: "#3aaeff" },
-        // every member gets an embedded wallet; holding BUMP must sign without a popup, so wallet UIs stay hidden
+        // email/Google members get an embedded wallet (holding BUMP must sign without a popup, so its UI stays hidden);
+        // members who sign in with their own wallet keep using it and get no embedded one
         embeddedWallets: { ethereum: { createOnLogin: "users-without-wallets" }, showWalletUIs: false },
         defaultChain: hideki,
         supportedChains: [hideki],

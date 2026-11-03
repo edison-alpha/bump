@@ -15,7 +15,7 @@ import { useRedirectIfSignedIn } from "../use-redirect-if-signed-in";
 
 export function WelcomeScreen() {
   const router = useRouter();
-  const { signInWithGoogle, continueAsGuest, authError } = useSession();
+  const { signInWithGoogle, signInWithWallet, continueAsGuest, authError } = useSession();
   useRedirectIfSignedIn();
   // straight into the guided first trade; an account is offered once there's a score worth saving
   const play = () => {
@@ -63,6 +63,9 @@ export function WelcomeScreen() {
             Email
           </Button>
         </div>
+        <Button variant="outline" size="md" onClick={signInWithWallet}>
+          Connect wallet
+        </Button>
         {/* a failed sign-in (coming back from Google, say) has to be visible here, not only on the email screens */}
         {authError && (
           <p role="alert" className="text-center text-[13px] leading-snug font-semibold text-coral">

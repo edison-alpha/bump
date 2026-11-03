@@ -15,7 +15,7 @@ const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export function EmailScreen() {
   const router = useRouter();
-  const { session, setEmail, sendEmailCode, signInWithGoogle, authError } = useSession();
+  const { session, setEmail, sendEmailCode, signInWithGoogle, signInWithWallet, authError } = useSession();
   const [value, setValue] = useState(session.email);
   const [touched, setTouched] = useState(false);
   const [sending, setSending] = useState(false);
@@ -87,6 +87,9 @@ export function EmailScreen() {
         </div>
 
         <GoogleButton size="lg" onClick={() => void signInWithGoogle()} />
+        <Button type="button" variant="outline" size="lg" onClick={signInWithWallet}>
+          Connect wallet
+        </Button>
       </form>
     </Screen>
   );
