@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useWallets } from "@privy-io/react-auth";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { createWalletClient, custom, formatEther, type Address } from "viem";
+import { createPublicClient, createWalletClient, custom, encodeFunctionData, formatEther, http, parseAbi, type Address } from "viem";
 import { api, ApiError } from "@/lib/api/client";
 import { qk } from "@/lib/api/query";
 import type { CloseTradeResponse, OpenTradeResponse, Trade, TradesResponse } from "@/lib/api/types";
@@ -133,7 +133,21 @@ export function ChainTradeProvider({ address, children }: { address: string; chi
     queryKey: ["bump", "chain", "voucher", address],
     enabled: !!bank,
     refetchInterval: 30_000,
-    queryFn: () => exchange().client.getPerpVoucherEligibility(bank as Address, account),
+    queryFn: async () => {
+      const eligibility = await exchange().client.getPerpVoucherEligibility(bank as Address, account);
+      if (!eligibility.eligible) return eligibility;
+      // The deployed distributor can refuse self-claims (dreamDEX grants vouchers itself, in batches) while the SDK's
+      // read still says "eligible". Dry-run the claim: if it reverts, the player must not be offered a button that fails.
+      try {
+        const client = createPublicClient({ chain: HIDEKI.chain, transport: http() });
+        const distributor = await client.readContract({ address: bank as Address, abi: parseAbi(["function getCreditGranter() view returns (address)"]), functionName: "getCreditGranter" });
+        await client.call({ account, to: distributor, data: encodeFunctionData({ abi: parseAbi(["function claim()"]), functionName: "claim" }) });
+      } catch (error) {
+        // only a revert means "not claimable"; a flaky RPC keeps the SDK's answer
+        if ((error as { name?: string }).name === "CallExecutionError") return { eligible: false as const, reason: "selfClaimDisabled" };
+      }
+      return eligibility;
+    },
   });
 
   const row = markets?.[draft.marketId];

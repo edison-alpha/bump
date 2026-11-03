@@ -61,7 +61,14 @@ export function ChargeUpCard() {
             {claiming ? "Claiming…" : refillLabel}
           </Button>
         ) : (
-          <p className="text-[12px] text-white/80">No voucher left for this wallet. Send USDso (Hideki testnet) to your wallet address to trade.</p>
+          <>
+            <p className="text-[12px] text-white/80">
+              dreamDEX hands out the $1,000 voucher itself, so it can&apos;t be claimed from here right now. Send USDso (Hideki testnet) to your wallet address to trade.
+            </p>
+            <button type="button" onClick={copy} className="self-start text-[13px] font-semibold text-cyan underline underline-offset-2">
+              Copy wallet address
+            </button>
+          </>
         ))}
       {!hasGas && <p className="text-[12px] text-white/80">Send STT to your wallet address (Hideki testnet) to cover gas and the TP/SL fee.</p>}
     </Card>
