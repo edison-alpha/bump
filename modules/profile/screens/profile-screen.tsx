@@ -96,6 +96,7 @@ export function ProfileScreen() {
 
       <ul className="flex flex-col gap-1.5">
         {guest && <MenuRow icon="trophy" label="Save my progress (sign in)" href="/sign-in" />}
+        {mode === "chain" && <MenuRow icon="trophy" label="Bridge USDso to Hideki" href="/bridge" />}
         <MenuRow icon="history" label="Trade history" href="/history" />
         {!guest && (
           <MenuRow

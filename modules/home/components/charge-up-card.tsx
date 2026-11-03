@@ -4,7 +4,6 @@ import Link from "next/link";
 import { useConsole } from "@/components/console/console-provider";
 import { Card } from "@/components/ui/card";
 import { usd } from "@/lib/format";
-import { BridgeToHideki } from "@/modules/trade/components/bridge-to-hideki";
 import { MoveToAccount } from "@/modules/trade/components/move-to-account";
 import { useTrade } from "@/modules/trade/trade-provider";
 
@@ -51,13 +50,17 @@ export function ChargeUpCard() {
         USDso is read from {setup.linked ? "your dreamDEX account" : "your wallet"} {shorten(setup.account)}
         {setup.linked ? `, STT from your wallet ${shorten(setup.address)}` : ""}.
       </p>
-      <BridgeToHideki />
       <MoveToAccount />
       {setup.balanceError &&<p className="text-[11px] leading-snug text-coral">Couldn&apos;t read the USDso balance. It retries every 10 seconds.</p>}
       <div className="flex gap-3">
         <button type="button" onClick={copy} className={link}>
           Copy address
         </button>
+        {!funded && (
+          <Link href="/bridge" className={link}>
+            Bridge USDso
+          </Link>
+        )}
         {!funded && !setup.linked && (
           <Link href="/profile" className={link}>
             Use my dreamDEX account
