@@ -2,6 +2,7 @@
 
 import { useState, type ReactNode } from "react";
 import { PrivyProvider } from "@privy-io/react-auth";
+import { somniaShannon } from "@somnia-chain/markets-sdk/chains";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { ConsoleProvider } from "@/components/console/console-provider";
 import { ClickSounds } from "@/components/shell/click-sounds";
@@ -27,7 +28,8 @@ function Auth({ children }: { children: ReactNode }) {
         // members who sign in with their own wallet keep using it and get no embedded one
         embeddedWallets: { ethereum: { createOnLogin: "users-without-wallets" }, showWalletUIs: false },
         defaultChain: hideki,
-        supportedChains: [hideki],
+        // Somnia Testnet is listed only so the wallet can switch to it for the Hideki bridge; trading stays on Hideki
+        supportedChains: [hideki, somniaShannon],
       }}
     >
       {children}
