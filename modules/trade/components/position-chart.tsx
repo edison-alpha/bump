@@ -20,6 +20,7 @@ const NOW_X = 62;
 
 /** Price line up to "Now" with target / entry / stop guides; grows to fill the LCD. Labels are HTML so text stays crisp. */
 export function PositionChart({ series, startLabel, entry, target, stop }: PositionChartProps) {
+  if (series.length < 2) return <div role="status" className="grid min-h-[180px] flex-1 place-items-center text-center text-[13px] text-white/70">Waiting for recorded price history.</div>;
   const levels = { target, entry, stop };
   const all = [...series, target, stop];
   const max = Math.max(...all);

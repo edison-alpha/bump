@@ -9,6 +9,7 @@ import { SpeechBubble } from "@/components/ui/speech-bubble";
 import { signedPct, usdPriceShort } from "@/lib/format";
 import { MarketRow } from "@/modules/market/components/market-row";
 import { useMarkets } from "@/modules/market/price-provider";
+import { PriceNotice } from "@/modules/market/components/price-notice";
 import { Coach, KeyName } from "@/modules/progress/components/coach";
 import { useProgress } from "@/modules/progress/progress-provider";
 import { useTrade } from "../trade-provider";
@@ -37,7 +38,8 @@ export function PickMarketScreen() {
   });
 
   return (
-    <Screen title="Pick a coin">
+    <Screen title="Pick a coin" className="[&>*]:shrink-0">
+      <PriceNotice market={selected} />
       <Coach step={1} points="sides">
         Think {selected.name} goes up? Press <KeyName tone="buy">BUY</KeyName>. Down? Press <KeyName tone="sell">SELL</KeyName>.
       </Coach>

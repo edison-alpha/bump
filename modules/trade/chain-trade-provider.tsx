@@ -174,7 +174,7 @@ export function ChainTradeProvider({ address, tradingAccount, children }: { addr
   const priceBucket = Number(live.price.toPrecision(3));
   const check = useQuery({
     queryKey: ["bump", "chain", "check", account, draft.marketId, draft.side, draft.margin, draft.leverage, priceBucket],
-    enabled: !!row && !position && maxLeverage >= draft.leverage && draft.margin >= MIN_STAKE,
+    enabled: !!row && !position && live.priceStatus === "live" && maxLeverage >= draft.leverage && draft.margin >= MIN_STAKE,
     staleTime: 4_000,
     queryFn: async (): Promise<{ error: string | null }> => {
       const r = row as NonNullable<typeof row>;
@@ -210,7 +210,9 @@ export function ChainTradeProvider({ address, tradingAccount, children }: { addr
                   ? `Your voucher can't trade ${draft.marketId.toUpperCase()}.`
                   : draft.leverage > maxLeverage
                     ? `${draft.marketId.toUpperCase()} allows up to ${maxLeverage}x for you.`
-                    : (check.data?.error ?? null);
+                    : live.priceStatus !== "live"
+                      ? "Waiting for a live dreamDEX price."
+                      : (check.data?.error ?? null);
 
   const setup = useMemo<ChainSetup>(
     () => ({ address, account, linked: !!tradingAccount, gas: gas.data ?? 0, gasNeeded: GAS_NEEDED_STT, connected: !!markets && gas.isSuccess }),

@@ -14,6 +14,7 @@ import { cn } from "@/lib/cn";
 import { signedPct, signedUsd, usdPrice } from "@/lib/format";
 import { sfx } from "@/lib/sound";
 import { useMarket, useSeries } from "@/modules/market/price-provider";
+import { PriceNotice } from "@/modules/market/components/price-notice";
 import { Coach, KeyName } from "@/modules/progress/components/coach";
 import { pnlOnMarginPct, priceMovePct, stopPrice, targetPrice, targetProgress, unrealizedPnl } from "../calc";
 import { KeyHint } from "../components/key-hint";
@@ -22,11 +23,11 @@ import { SideChip } from "../components/trade-header";
 import { useRequirePosition } from "../use-require-position";
 import { haptic } from "@/lib/haptics";
 
-function LiveChip() {
+function LiveChip({ live }: { live: boolean }) {
   return (
     <Chip tone="live" className="h-8 rounded-full px-3 text-[14px] shadow-[inset_0_1px_0_rgba(255,255,255,0.15),0_2px_4px_rgba(0,0,0,0.3)]">
-      <span className="size-2.5 rounded-full bg-mint shadow-[0_0_8px_#3fe0a6]" />
-      Live
+      <span className={cn("size-2.5 rounded-full", live ? "bg-mint" : "bg-gold")} />
+      {live ? "Live" : "Paused"}
     </Chip>
   );
 }
@@ -85,7 +86,7 @@ export function LivePositionScreen() {
     readout: { tag: "CHART", value: frame.label, sub: agoLabel(frame.ms * CHART_POINTS).replace(" ago", "") },
   });
 
-  const progress = position ? targetProgress(position.side, position.entry, market.price, position.targetPct, position.stopPct) : 0;
+  const progress = position && market.priceStatus === "live" ? targetProgress(position.side, position.entry, market.price, position.targetPct, position.stopPct) : 0;
 
   // a ping (and a buzz) when the trade passes halfway to its target, a warning halfway to its stop
   const zone = zoneOf(progress);
@@ -110,7 +111,8 @@ export function LivePositionScreen() {
   const tone = pnl >= 0 ? "text-mint" : "text-coral";
 
   return (
-    <Screen title="Your position" right={<LiveChip />}>
+    <Screen title="Your position" className="[&>*]:shrink-0" right={<LiveChip live={market.priceStatus === "live"} />}>
+      <PriceNotice market={market} />
       <Coach step={3} points={null}>
         You’re in! Price hits the green line = you win, the red line = the stop saves you. Or hold{" "}
         <KeyName tone="gold">BUMP</KeyName> to close anytime.
@@ -150,7 +152,7 @@ export function LivePositionScreen() {
 
       <Card className="relative mt-1 flex items-center gap-2 px-3 py-2">
         <div className="flex-1">
-          <p className="text-[14px]">Right now</p>
+          <p className="text-[14px]">{market.priceStatus === "live" ? "Right now" : "Last known estimate"}</p>
           <p className={cn("font-display text-[32px] leading-none font-bold tabular-nums", tone)}>{signedUsd(pnl)}</p>
           <p className={cn("mt-0.5 font-display text-[14px] leading-tight font-bold", tone)}>
             {signedPct(pnlOnMarginPct(pnl, position.margin), 1)} on your stake
@@ -158,7 +160,7 @@ export function LivePositionScreen() {
         </div>
         <div className="flex flex-col items-end gap-1">
           <SpeechBubble tail="bottom-left" className="max-w-[140px] text-[12px]">
-            {mood(progress)}
+            {market.priceStatus === "live" ? mood(progress) : "Waiting for a fresh price."}
           </SpeechBubble>
           <Mascot size={64} sparkles={progress >= 0.3 ? "right" : undefined} bob={progress > -0.3} />
         </div>

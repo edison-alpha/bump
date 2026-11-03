@@ -15,6 +15,7 @@ import { humanPrice } from "@/lib/bump/dreamdex";
 import { useChainMarkets } from "@/lib/chain/markets";
 import { signedPct, usdPrice } from "@/lib/format";
 import { useMarket, useSeries } from "@/modules/market/price-provider";
+import { PriceNotice } from "@/modules/market/components/price-notice";
 import { PriceChart } from "../components/price-chart";
 import { useTrade } from "../trade-provider";
 import type { Side } from "../types";
@@ -47,11 +48,12 @@ export function MarketDetailScreen({ marketId }: { marketId: string }) {
   const series = useSeries(market.id, active.ms, POINTS);
   const up = market.change >= 0;
 
-  const high = Math.max(...series);
-  const low = Math.min(...series);
-  const move = series.length > 1 ? ((series[series.length - 1] as number) / (series[0] as number) - 1) * 100 : 0;
+  const high = series.length > 1 ? Math.max(...series) : NaN;
+  const low = series.length > 1 ? Math.min(...series) : NaN;
+  const move = series.length > 1 ? ((series[series.length - 1] as number) / (series[0] as number) - 1) * 100 : NaN;
 
   const choose = (side: Side) => {
+    if (market.priceStatus !== "live") return;
     patchDraft({ marketId: market.id, side });
     router.push("/trade/build");
   };
@@ -67,7 +69,8 @@ export function MarketDetailScreen({ marketId }: { marketId: string }) {
   });
 
   return (
-    <Screen title={market.name}>
+    <Screen title={market.name} className="[&>*]:shrink-0">
+      <PriceNotice market={market} />
       <div className="flex items-center gap-2.5">
         <CoinIcon symbol={market.symbol} size={44} />
         <div className="min-w-0 flex-1">
@@ -87,12 +90,12 @@ export function MarketDetailScreen({ marketId }: { marketId: string }) {
           onChange={setFrame}
         />
         <p className="text-center text-[12px] text-white/70">
-          Last {active.span}: <span className={cn("font-semibold", move >= 0 ? "text-mint" : "text-coral")}>{signedPct(move, 2)}</span>
+          Exchange history · up to {active.span}: <span className={cn("font-semibold", move >= 0 ? "text-mint" : "text-coral")}>{signedPct(move, 2)}</span>
         </p>
       </Card>
 
       <Card className="divide-y divide-white/10 px-3 py-0.5">
-        <StatRow label="24h change" value={signedPct(market.change, 2)} tone={up ? "positive" : "negative"} />
+        <StatRow label="24h change (approx.)" value={signedPct(market.change, 2)} tone={up ? "positive" : "negative"} />
         <StatRow label={`High · ${active.span}`} value={usdPrice(high)} />
         <StatRow label={`Low · ${active.span}`} value={usdPrice(low)} />
         <StatRow label="Max leverage" value={`${market.maxLeverage}x`} />
@@ -101,10 +104,10 @@ export function MarketDetailScreen({ marketId }: { marketId: string }) {
       </Card>
 
       <div className="mt-auto grid grid-cols-2 gap-2">
-        <Button variant="short" size="lg" onClick={() => choose("short")}>
+        <Button variant="short" size="lg" disabled={market.priceStatus !== "live"} onClick={() => choose("short")}>
           SELL · drops
         </Button>
-        <Button variant="long" size="lg" onClick={() => choose("long")}>
+        <Button variant="long" size="lg" disabled={market.priceStatus !== "live"} onClick={() => choose("long")}>
           BUY · climbs
         </Button>
       </div>

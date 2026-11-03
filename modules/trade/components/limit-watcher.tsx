@@ -23,7 +23,7 @@ export function LimitWatcher() {
   const lastSeen = useRef<string | null>(null);
 
   useEffect(() => {
-    if (mode !== "practice" || !ready || !position || closedId.current === position.id) return;
+    if (mode !== "practice" || !ready || !position || market.priceStatus !== "live" || closedId.current === position.id) return;
     const price = market.price;
     const long = position.side === "long";
     const target = targetPrice(position.entry, position);
@@ -36,7 +36,7 @@ export function LimitWatcher() {
     closedId.current = position.id;
     const done = hitTarget ? closePosition(100, target, "target") : closePosition(100, price, "stop");
     void done.then(() => router.replace("/position/closed"));
-  }, [mode, ready, position, market.price, closePosition, router]);
+  }, [mode, ready, position, market.price, market.priceStatus, closePosition, router]);
 
   useEffect(() => {
     if (mode !== "chain" || !ready) return;

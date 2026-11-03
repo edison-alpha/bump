@@ -4,7 +4,7 @@ import { usdPrice } from "@/lib/format";
 /** A price line with a fill, and the range it covers on the right edge. Grows to fill its box. */
 export function PriceChart({ series }: { series: number[] }) {
   const id = useId();
-  if (series.length < 2) return <div className="min-h-[170px] flex-1" />;
+  if (series.length < 2) return <div role="status" className="grid min-h-[170px] flex-1 place-items-center px-3 text-center text-[13px] text-white/70">Waiting for recorded dreamDEX prices.</div>;
 
   const up = (series[series.length - 1] as number) >= (series[0] as number);
   const color = up ? "#3fe0a6" : "#ff6377";

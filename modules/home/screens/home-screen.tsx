@@ -16,6 +16,7 @@ import { Mascot } from "@/components/ui/mascot";
 import { cn } from "@/lib/cn";
 import { signedPct, signedUsd, usd, usdPrice } from "@/lib/format";
 import { useMarket, useMarkets } from "@/modules/market/price-provider";
+import { PriceNotice } from "@/modules/market/components/price-notice";
 import { Coach } from "@/modules/progress/components/coach";
 import { LevelChip, MissionsCard, StreakChip } from "@/modules/progress/components/progress-bits";
 import { useProgress } from "@/modules/progress/progress-provider";
@@ -38,8 +39,10 @@ export function HomeScreen() {
   const name = session.name || "there";
 
   // the coin that moved most over 24h (the figure drifts slowly, so the pick doesn't flicker with every tick)
-  const hot = markets.reduce((a, b) => (Math.abs(b.change) > Math.abs(a.change) ? b : a));
+  const liveMarkets = markets.filter((market) => market.priceStatus === "live");
+  const hot = (liveMarkets.length ? liveMarkets : markets).reduce((a, b) => (Number.isFinite(b.change) && (!Number.isFinite(a.change) || Math.abs(b.change) > Math.abs(a.change)) ? b : a));
   const call = (side: Side) => {
+    if (hot.priceStatus !== "live") return;
     patchDraft({ marketId: hot.id, side });
     router.push("/trade/build");
   };
@@ -54,6 +57,7 @@ export function HomeScreen() {
 
   return (
     <Screen
+      className="[&>*]:shrink-0"
       header={
         <header className="flex shrink-0 items-center gap-2">
           <Link href="/me" aria-label="Profile" className="rounded-full">
@@ -85,6 +89,7 @@ export function HomeScreen() {
       </Card>
 
       <ChargeUpCard />
+      <PriceNotice market={position ? markets.find((market) => market.id === position.marketId) ?? hot : hot} />
 
       {position ? (
         <OpenTradeCard position={position} />
@@ -105,10 +110,10 @@ export function HomeScreen() {
             <span className="font-display text-[15px] font-semibold tabular-nums">{usdPrice(hot.price)}</span>
           </div>
           <div className="mt-2 grid grid-cols-2 gap-2">
-            <Button variant="short" size="md" onClick={() => call("short")}>
+            <Button variant="short" size="md" disabled={hot.priceStatus !== "live"} onClick={() => call("short")}>
               SELL · drops
             </Button>
-            <Button variant="long" size="md" onClick={() => call("long")}>
+            <Button variant="long" size="md" disabled={hot.priceStatus !== "live"} onClick={() => call("long")}>
               BUY · climbs
             </Button>
           </div>

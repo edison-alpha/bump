@@ -4,6 +4,7 @@ import { CoinIcon } from "@/components/ui/coin-icon";
 import { Sparkline } from "@/components/ui/sparkline";
 import { signedPct, usd, usdPrice } from "@/lib/format";
 import type { LiveMarket } from "@/modules/market/types";
+import { priceStatusLabel } from "@/modules/market/components/price-notice";
 import type { Side } from "../types";
 
 type TradeHeaderProps = { market: LiveMarket; side: Side; leverage: number };
@@ -23,7 +24,7 @@ export function TradeHeader({ market, side, leverage }: TradeHeaderProps) {
         <div className="flex items-baseline gap-2">
           <span className="font-display text-[16px] font-semibold tabular-nums">{usdPrice(market.price)}</span>
           <span className={up ? "font-display text-[13px] font-semibold text-mint" : "font-display text-[13px] font-semibold text-coral"}>
-            {signedPct(market.change)}
+            {market.priceStatus === "live" ? signedPct(market.change) : priceStatusLabel(market)}
           </span>
         </div>
       </div>

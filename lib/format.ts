@@ -4,17 +4,17 @@ const smallUsdFormat = new Intl.NumberFormat("en-US", { style: "currency", curre
 
 const wholeUsdFormat = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 });
 
-export const usd = (n: number) => usdFormat.format(n);
+export const usd = (n: number) => Number.isFinite(n) ? usdFormat.format(n) : "…";
 
 /** Like `usd`, but keeps 4 decimals for sub-dollar coins so their moves stay visible. */
-export const usdPrice = (n: number) => (Math.abs(n) < 1 ? smallUsdFormat : usdFormat).format(n);
+export const usdPrice = (n: number) => Number.isFinite(n) ? (Math.abs(n) < 1 ? smallUsdFormat : usdFormat).format(n) : "…";
 
 /** Price for tight spaces (the mini LCD): whole dollars from $1,000 up. */
 export const usdPriceShort = (n: number) => (Math.abs(n) >= 1000 ? wholeUsdFormat.format(n) : usdPrice(n));
 
-export const signedUsd = (n: number) => `${n < 0 ? "-" : "+"}${usd(Math.abs(n))}`;
+export const signedUsd = (n: number) => Number.isFinite(n) ? `${n < 0 ? "-" : "+"}${usd(Math.abs(n))}` : "…";
 
-export const signedPct = (n: number, digits = 2) => `${n < 0 ? "-" : "+"}${Math.abs(n).toFixed(digits)}%`;
+export const signedPct = (n: number, digits = 2) => Number.isFinite(n) ? `${n < 0 ? "-" : "+"}${Math.abs(n).toFixed(digits)}%` : "…";
 
 export const shortDate = (ms: number) =>
   new Date(ms).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });

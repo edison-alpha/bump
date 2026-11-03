@@ -14,6 +14,7 @@ import { Segmented } from "@/components/ui/segmented";
 import { StatRow } from "@/components/ui/stat-row";
 import { round2, signedUsd, usd, usdPrice } from "@/lib/format";
 import { useMarket } from "@/modules/market/price-provider";
+import { PriceNotice } from "@/modules/market/components/price-notice";
 import { positionSize, stepClosePct, unrealizedPnl } from "../calc";
 import { KeyHint } from "../components/key-hint";
 import { SideChip } from "../components/trade-header";
@@ -42,7 +43,7 @@ export function ClosePositionScreen() {
   });
 
   const confirm = () => {
-    if (busy) return;
+    if (busy || (mode === "practice" && market.priceStatus !== "live")) return;
     setBusy(true);
     closing.current = true;
     closePosition(percent, market.price)
@@ -53,7 +54,7 @@ export function ClosePositionScreen() {
         flash(error.message, "warn");
       });
   };
-  usePrimaryAction(position ? { label: busy ? "Closing…" : `Close ${percent}%`, onPress: confirm, disabled: busy } : null);
+  usePrimaryAction(position ? { label: busy ? "Closing…" : `Close ${percent}%`, onPress: confirm, disabled: busy || (mode === "practice" && market.priceStatus !== "live") } : null);
 
   if (!position) return <Screen title="Close trade">{null}</Screen>;
 
@@ -62,7 +63,8 @@ export function ClosePositionScreen() {
   const grossProfit = exact ?? estimate;
 
   return (
-    <Screen title="Close trade">
+    <Screen title="Close trade" className="[&>*]:shrink-0">
+      <PriceNotice market={market} />
       <div className="flex items-center gap-2.5">
         <CoinIcon symbol={market.symbol} size={40} />
         <span className="text-pop font-display text-[24px] font-bold">{market.name}</span>
@@ -116,7 +118,7 @@ export function ClosePositionScreen() {
         <StatRow
           label={
             <>
-              {grossProfit >= 0 ? "You’d win" : "You’d lose"}
+              {!Number.isFinite(grossProfit) ? "Estimate unavailable" : grossProfit >= 0 ? "You’d win" : "You’d lose"}
               <InfoTip text={exact !== null ? "What dreamDEX says you'd get after funding and fees. The fill can differ a little." : "If you closed at this price. The final number depends on the fill."} />
             </>
           }
@@ -127,7 +129,7 @@ export function ClosePositionScreen() {
 
       <KeyHint action="close" />
       <div className="flex flex-col gap-2">
-        <Button variant="danger" size="lg" className="rounded-[18px] text-[20px]" onClick={confirm} disabled={busy}>
+        <Button variant="danger" size="lg" className="rounded-[18px] text-[20px]" onClick={confirm} disabled={busy || (mode === "practice" && market.priceStatus !== "live")}>
           {busy ? "Closing…" : `Close ${percent}%`}
         </Button>
         <Button variant="light" size="lg" className="rounded-[18px] text-[20px] font-bold" onClick={() => router.back()}>

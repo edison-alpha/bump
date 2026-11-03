@@ -3,6 +3,7 @@
 import { useCallback, useMemo, type ReactNode } from "react";
 import { round2, usd } from "@/lib/format";
 import { useMarketMaxLeverage } from "@/lib/chain/markets";
+import { useMarket } from "@/modules/market/price-provider";
 import { newId } from "@/lib/id";
 import { sfx } from "@/lib/sound";
 import { useLocalStorageState } from "@/lib/use-local-storage-state";
@@ -36,6 +37,8 @@ export function LocalTradeProvider({ children }: { children: ReactNode }) {
   const available = round2(Math.max(0, balance - (state.position?.margin ?? 0)));
   const broke = !state.position && balance < MIN_STAKE;
   const maxLeverage = useMarketMaxLeverage(state.draft.marketId);
+  const market = useMarket(state.draft.marketId);
+  const positionMarket = useMarket(state.position?.marketId ?? state.draft.marketId);
   const blocker = state.position
     ? "Close your trade first."
     : broke
@@ -46,11 +49,13 @@ export function LocalTradeProvider({ children }: { children: ReactNode }) {
           ? `Your stake is more than your ${usd(available)} balance.`
           : state.draft.leverage > maxLeverage
             ? `${state.draft.marketId.toUpperCase()} allows up to ${maxLeverage}x.`
-            : null;
+            : market.priceStatus !== "live"
+              ? "Waiting for a live dreamDEX price."
+              : null;
 
   const openPosition = useCallback(
     async (entry: number) => {
-      if (blocker) return false;
+      if (blocker || !Number.isFinite(entry) || entry <= 0) return false;
       sfx.open();
       setState((s) => (s.position ? s : { ...s, position: { ...s.draft, id: newId(), entry, openedAt: Date.now() } }));
       return true;
@@ -75,6 +80,7 @@ export function LocalTradeProvider({ children }: { children: ReactNode }) {
     async (percent: number, exit: number, reason: CloseReason = "manual") => {
       const position = state.position;
       if (!position) return null;
+      if (positionMarket.priceStatus !== "live" || !Number.isFinite(exit) || exit <= 0) throw new Error("Live dreamDEX price unavailable. Try again when the feed recovers.");
       const fraction = Math.min(percent, 100) / 100;
       const closedMargin = round2(position.margin * fraction);
       const receipt: ClosedTrade = {
@@ -98,7 +104,7 @@ export function LocalTradeProvider({ children }: { children: ReactNode }) {
       }));
       return receipt;
     },
-    [state.position, setState],
+    [state.position, setState, positionMarket.priceStatus],
   );
 
   const previewClose = useCallback(async () => null, []);

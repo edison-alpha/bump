@@ -3,6 +3,7 @@ import { CoinIcon } from "@/components/ui/coin-icon";
 import { cn } from "@/lib/cn";
 import { signedPct, usd, usdPrice } from "@/lib/format";
 import type { LiveMarket } from "../types";
+import { priceStatusLabel } from "./price-notice";
 
 type MarketRowProps = {
   market: LiveMarket;
@@ -35,7 +36,7 @@ export function MarketRow({ market, variant = "picker", selected = false, onSele
             up ? "bg-linear-to-b from-[#1f9a68] to-[#11734c]" : "bg-linear-to-b from-[#e2475f] to-[#b62a41]",
           )}
         >
-          {signedPct(market.change, 1)}
+            {market.priceStatus === "live" ? signedPct(market.change, 1) : priceStatusLabel(market)}
         </span>
       </Tag>
     );
@@ -57,8 +58,8 @@ export function MarketRow({ market, variant = "picker", selected = false, onSele
       <Sparkline data={market.series} className="h-8 w-[70px]" />
       <span className="text-right">
         <span className="block font-display text-[15px] font-semibold tabular-nums">{usdPrice(market.price)}</span>
-        <span className={cn("block font-display text-[15px] font-bold tabular-nums", up ? "text-mint" : "text-coral")}>
-          {signedPct(market.change)}
+        <span className={cn("block font-display font-bold tabular-nums", market.priceStatus !== "live" || !Number.isFinite(market.change) ? "text-[11px] text-white/70" : up ? "text-[15px] text-mint" : "text-[15px] text-coral")}>
+          {market.priceStatus !== "live" ? priceStatusLabel(market) : Number.isFinite(market.change) ? signedPct(market.change) : "24h unavailable"}
         </span>
       </span>
     </Tag>
