@@ -39,8 +39,8 @@ export const NOTCH_CLIP = `polygon(${[
 ].join(", ")})`;
 
 /** The panel's rim rings (groove, light rim, shade) as an inset shadow and as a ring around a rounded corner. */
-const RINGS_INSET = "inset 0 0 0 3px #0a3f86, inset 0 0 0 6px rgb(150 222 255 / 0.75), inset 0 0 0 8px rgb(10 90 190 / 0.35)";
-const RINGS_ARC = `radial-gradient(circle at 0 0, transparent ${R_OUT}px, #0a3f86 ${R_OUT}px ${R_OUT + 3}px, rgb(150 222 255 / 0.75) ${R_OUT + 3}px ${R_OUT + 6}px, rgb(10 90 190 / 0.35) ${R_OUT + 6}px ${R_OUT + RING}px, transparent ${R_OUT + RING}px)`;
+const RINGS_INSET = "inset 0 0 0 3px var(--bz-groove), inset 0 0 0 6px rgb(var(--bz-lip) / 0.75), inset 0 0 0 8px rgb(var(--bz-glow) / 0.35)";
+const RINGS_ARC = `radial-gradient(circle at 0 0, transparent ${R_OUT}px, var(--bz-groove) ${R_OUT}px ${R_OUT + 3}px, rgb(var(--bz-lip) / 0.75) ${R_OUT + 3}px ${R_OUT + 6}px, rgb(var(--bz-glow) / 0.35) ${R_OUT + 6}px ${R_OUT + RING}px, transparent ${R_OUT + RING}px)`;
 
 /**
  * Mini LCD in the screen's corner notch: names the value the wheel turns and shows it live (for TP / SL the trigger

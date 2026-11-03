@@ -44,7 +44,10 @@ export function PickMarketScreen() {
 
       <div className="flex flex-col gap-2">
         {markets.map((m) => (
-          <MarketRow key={m.id} market={m} selected={m.id === draft.marketId} onSelect={() => patchDraft({ marketId: m.id })} />
+          <MarketRow key={m.id} market={m} selected={m.id === draft.marketId} onSelect={() => {
+              patchDraft({ marketId: m.id });
+              router.push(`/markets/${m.id}`);
+            }} />
         ))}
       </div>
 

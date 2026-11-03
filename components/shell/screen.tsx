@@ -63,10 +63,10 @@ function Lcd({ header, children, className }: { header?: ReactNode; children: Re
         {header}
         {children}
       </div>
-      {/* glass: inner depth + diagonal glare, above content but never interactive */}
+      {/* glass: pixel grid, reflection and inner depth, above content but never interactive */}
       <span
         aria-hidden
-        className="pointer-events-none absolute inset-0 rounded-[inherit] bg-[linear-gradient(125deg,rgba(255,255,255,0.07)_0%,rgba(255,255,255,0.02)_28%,transparent_42%)] shadow-[inset_0_10px_18px_rgba(0,0,0,0.45),inset_0_-8px_14px_rgba(0,0,0,0.3)]"
+        className="lcd-glass pointer-events-none absolute inset-0 rounded-[inherit]"
       />
     </section>
   );

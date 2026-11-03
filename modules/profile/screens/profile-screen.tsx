@@ -20,6 +20,7 @@ import { useSession } from "@/modules/session/session-provider";
 import { useTrade } from "@/modules/trade/trade-provider";
 import { DreamdexAccountCard } from "../components/dreamdex-account-card";
 import { MenuRow } from "../components/menu-row";
+import { SkinCard } from "../components/skin-card";
 import { WalletBalancesCard } from "../components/wallet-balances-card";
 
 /** Long dash used for empty stats, as in the design. */
@@ -74,6 +75,7 @@ export function ProfileScreen() {
         )}
       </Card>
 
+      <SkinCard />
       {mode === "chain" && <WalletBalancesCard />}
       {mode === "chain" && <DreamdexAccountCard />}
 

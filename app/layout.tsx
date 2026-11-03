@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import { PhoneFrame } from "@/components/shell/phone-frame";
 import { RegisterServiceWorker } from "@/components/shell/register-sw";
 import { StandaloneViewport } from "@/components/shell/standalone-viewport";
+import { SKIN_BOOT_SCRIPT } from "@/lib/skins";
 import { Providers } from "./providers";
 import "./globals.css";
 
@@ -33,6 +34,9 @@ export const viewport: Viewport = {
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="en" suppressHydrationWarning className={`${display.variable} ${sans.variable}`}>
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: SKIN_BOOT_SCRIPT }} />
+      </head>
       <body>
         <StandaloneViewport />
         <Providers>
