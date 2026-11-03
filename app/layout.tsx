@@ -14,8 +14,8 @@ export const metadata: Metadata = {
   title: { default: "bump", template: "%s · bump" },
   description: "Up or down? Practice trading crypto with play money on a pocket-sized console.",
   applicationName: "bump",
-  // Translucent status bars can leave an unreachable bottom strip in installed iOS apps.
-  appleWebApp: { capable: true, title: "bump", statusBarStyle: "default" },
+  // Let the shell's material continue behind the system status bar.
+  appleWebApp: { capable: true, title: "bump", statusBarStyle: "black-translucent" },
   icons: { icon: "/icons/icon-192.png", apple: "/icons/apple-touch-icon.png" },
   formatDetection: { telephone: false },
 };

@@ -27,13 +27,13 @@ function Vents({ className }: { className: string }) {
 /**
  * The handheld console: screen on top, hardware deck below. The page never scrolls; only the LCD does.
  * Phones / installed PWA: full-bleed, edge to edge and under the status bar + home indicator (safe-area padding).
- * Fixed to the available viewport; iOS uses the default status bar so it does not subtract its height twice.
+ * Installed phones use a full-height document so the same shell material covers the status-bar area.
  * Larger screens: a centered, rounded, floating device, shrunk to fit short windows, with screws and speaker slits.
  * touch-none: the bezel and deck can't be pinched or dragged; the LCD opts back into vertical panning.
  */
 export function PhoneFrame({ children }: { children: ReactNode }) {
   return (
-    <div className="fixed inset-0 flex flex-col md:static md:mx-auto md:w-full md:max-w-[430px] md:py-6">
+    <div className="console-frame fixed inset-0 flex flex-col md:static md:mx-auto md:w-full md:max-w-[430px] md:py-6">
       <div className="console md:console-device relative flex min-h-0 flex-1 touch-none flex-col pt-[env(safe-area-inset-top)] md:h-[min(880px,calc(100dvh-48px))] md:min-h-[640px] md:flex-none md:pt-0">
         {children}
         {/* the parting line where the screen half meets the key deck */}

@@ -219,6 +219,20 @@ a {
 }
 
 @media (max-width: 767px) and (display-mode: standalone) {
+  /* WebKit can exclude safe areas from percentage/fixed viewport heights in installed apps.
+     Use the full document height instead: https://bugs.webkit.org/show_bug.cgi?id=254868 */
+  html,
+  body {
+    height: 100vh;
+    min-height: 100vh;
+  }
+
+  .console-frame {
+    position: absolute;
+    bottom: auto;
+    height: 100vh;
+  }
+
   .console-deck {
     padding-bottom: max(4px, env(safe-area-inset-bottom, 0px));
   }
