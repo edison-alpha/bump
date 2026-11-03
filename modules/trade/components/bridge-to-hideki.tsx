@@ -1,6 +1,7 @@
 "use client";
 
 import { useWallets } from "@privy-io/react-auth";
+import { DEFAULT_FEES } from "@somnia-chain/markets-sdk";
 import { BridgeToken, ChainId, createBridgeTransfer, getBridgeToken, somniaShannon } from "@somnia-chain/markets-sdk/chains";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
@@ -10,6 +11,8 @@ import { Button } from "@/components/ui/button";
 import { shortError } from "@/lib/bump/dreamdex";
 import { useTrade } from "@/modules/trade/trade-provider";
 
+/** The SDK's fixed gas ceiling; the wallet needs gas × max fee (0.6 STT) on hand, though unused gas is never charged. */
+const BRIDGE_GAS = 10_000_000n;
 const origin = getBridgeToken(BridgeToken.USDso, ChainId.somniaShannon);
 const originClient = createPublicClient({ chain: somniaShannon, transport: http() });
 
@@ -46,17 +49,26 @@ export function BridgeToHideki() {
         if (raw > parseUnits(held.data ?? "0", origin.decimals)) throw new Error(`Your wallet holds ${held.data ?? "0"} USDso on Somnia Testnet.`);
         const privy = wallets.find((w) => w.address.toLowerCase() === wallet.toLowerCase());
         if (!privy) throw new Error("Your wallet isn't ready yet. Try again in a moment.");
-        await privy.switchChain(ChainId.somniaShannon);
+        // each phase names itself in the error, so a node or wallet failure says where it happened
+        const phase = async <T,>(name: string, run: () => Promise<T>): Promise<T> => {
+          try {
+            return await run();
+          } catch (error) {
+            throw new Error(`${name}: ${shortError(error)}`);
+          }
+        };
+        await phase("Switching network", () => privy.switchChain(ChainId.somniaShannon));
         const walletClient = createWalletClient({ account: wallet, chain: somniaShannon, transport: custom(await privy.getEthereumProvider()) });
         const plan = createBridgeTransfer({ token: BridgeToken.USDso, from: ChainId.somniaShannon, to: ChainId.hidekiTestnet, amount: raw, recipient: setup.account as Address });
         // the approval has to land before the bridge call, or the transfer reverts
-        for (const step of [plan.approveStep, plan.bridgeStep]) {
+        for (const [name, step] of [["Approving", plan.approveStep], ["Bridging", plan.bridgeStep]] as const) {
           if (!step) continue;
-          const hash = await walletClient.sendTransaction({ to: step.to, data: step.data, value: step.value });
-          await originClient.waitForTransactionReceipt({ hash });
+          // gas and fees are fixed, like the SDK's own writes, so the wallet has nothing to estimate
+          const hash = await phase(name, () => walletClient.sendTransaction({ to: step.to, data: step.data, value: step.value, gas: BRIDGE_GAS, ...DEFAULT_FEES }));
+          await phase(`${name} (confirming)`, () => originClient.waitForTransactionReceipt({ hash }));
         }
       } catch (error) {
-        throw new Error(shortError(error));
+        throw error instanceof Error ? error : new Error(shortError(error));
       }
     },
     onSuccess: () => {
