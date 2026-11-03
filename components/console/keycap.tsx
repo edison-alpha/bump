@@ -22,7 +22,6 @@ export function Keycap({ tone = "dark", className, onClick, children, ...rest }:
     <button
       type="button"
       onClick={(e) => {
-        navigator.vibrate?.(8);
         onClick?.(e);
       }}
       className={cn(

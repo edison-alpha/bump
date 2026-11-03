@@ -3,6 +3,7 @@
 import { useRef, useState } from "react";
 import { sfx } from "@/lib/sound";
 import { useConsole } from "./console-provider";
+import { haptic } from "@/lib/haptics";
 
 const RIB_DEG = 20; // angle between ribs on the cylinder; one detent turns exactly one rib
 const DETENT_PX = 16; // drag distance per detent
@@ -25,7 +26,7 @@ export function ScrollWheel() {
 
   const tick = (dir: 1 | -1) => {
     activeDial?.ref.current.onStep(dir);
-    navigator.vibrate?.(4);
+    haptic(4);
     sfx.tick();
   };
 
@@ -56,7 +57,7 @@ export function ScrollWheel() {
     if (!activeDial) return;
     cycleDial();
     sfx.click();
-    navigator.vibrate?.(8);
+    haptic(8);
   };
 
   const label = activeDial ? `Adjust ${activeDial.ref.current.label}. Tap or press Enter for the next value` : "Scroll screen";

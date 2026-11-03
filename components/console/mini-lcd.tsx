@@ -3,6 +3,7 @@
 import { cn } from "@/lib/cn";
 import { sfx } from "@/lib/sound";
 import { useConsole } from "./console-provider";
+import { haptic } from "@/lib/haptics";
 
 const TONE = { positive: "text-[#5dffc0]", negative: "text-[#ff8a9b]" } as const;
 
@@ -53,7 +54,7 @@ export function MiniLcd({ right, bottom }: { right: number; bottom: number }) {
   const press = () => {
     cycleDial();
     sfx.click();
-    navigator.vibrate?.(8);
+    haptic(8);
   };
 
   return (

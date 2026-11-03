@@ -20,6 +20,7 @@ import { KeyHint } from "../components/key-hint";
 import { PositionChart } from "../components/position-chart";
 import { SideChip } from "../components/trade-header";
 import { useRequirePosition } from "../use-require-position";
+import { haptic } from "@/lib/haptics";
 
 function LiveChip() {
   return (
@@ -94,11 +95,11 @@ export function LivePositionScreen() {
     lastZone.current = zone;
     if (zone === 1) {
       sfx.ping();
-      navigator.vibrate?.([15, 60, 15]);
+      haptic([15, 60, 15]);
       flash("Halfway to your target!", "good");
     } else if (zone === -1) {
       sfx.warn();
-      navigator.vibrate?.(40);
+      haptic(40);
       flash("Getting close to your stop.", "warn");
     }
   }, [zone, flash]);

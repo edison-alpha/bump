@@ -9,6 +9,7 @@ import { useSession } from "@/modules/session/session-provider";
 import { useTrade } from "@/modules/trade/trade-provider";
 import { useConsole } from "./console-provider";
 import { Keycap } from "./keycap";
+import { haptic } from "@/lib/haptics";
 
 /** How long the key must be held to place or close a trade. */
 const HOLD_MS = 600;
@@ -41,7 +42,7 @@ export function ActionKey() {
 
   const deny = (text: string) => {
     sfx.deny();
-    navigator.vibrate?.([20, 40, 20]);
+    haptic([20, 40, 20]);
     setShakeId(Date.now());
     flash(text, "warn");
   };
@@ -93,11 +94,11 @@ export function ActionKey() {
       if (step !== h.lastStep) {
         h.lastStep = step;
         sfx.charge(p);
-        navigator.vibrate?.(5);
+        haptic(5);
       }
       if (p >= 1) {
         h.fired = true;
-        navigator.vibrate?.(30);
+        haptic(30);
         setCharge(0);
         fire();
         return;
