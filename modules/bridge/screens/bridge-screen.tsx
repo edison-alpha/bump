@@ -5,7 +5,7 @@ import { DEFAULT_FEES } from "@somnia-chain/markets-sdk";
 import { BridgeToken, ChainId, createBridgeTransfer, getBridgeToken, somniaShannon } from "@somnia-chain/markets-sdk/chains";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState, type ReactNode } from "react";
-import { createPublicClient, createWalletClient, custom, erc20Abi, formatUnits, http, numberToHex, parseAbi, parseUnits, type Address } from "viem";
+import { createPublicClient, createWalletClient, custom, erc20Abi, formatUnits, http, numberToHex, parseAbi, parseUnits, type Address, type Hex } from "viem";
 import { useConsole } from "@/components/console/console-provider";
 import { Screen } from "@/components/shell/screen";
 import { Button } from "@/components/ui/button";
@@ -120,7 +120,20 @@ export function BridgeScreen() {
     if (!wallet) return;
     try {
       const saved = localStorage.getItem(storeKey);
-      if (saved) setRun(JSON.parse(saved) as BridgeRun);
+      if (saved) {
+        const stored = JSON.parse(saved) as BridgeRun;
+        setRun(stored);
+        // a saved bridge is only believed once its transaction is confirmed as successful on Somnia Testnet; earlier
+        // versions saved reverted ones as "sent", and those must not keep showing a delivery that can never come
+        if (stored.stage === "deliver" && stored.bridgeHash) {
+          originClient
+            .getTransactionReceipt({ hash: stored.bridgeHash as Hex })
+            .then((receipt) => {
+              if (receipt.status !== "success") update({ stage: "failed", failedAt: "send", error: "Bridging: the transaction reverted on Somnia Testnet, no USDso moved." });
+            })
+            .catch(() => undefined);
+        }
+      }
     } catch {
       // storage unavailable: a reload just forgets the progress card, the funds are unaffected
     }
