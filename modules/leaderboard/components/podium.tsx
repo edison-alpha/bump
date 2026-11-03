@@ -41,7 +41,7 @@ function Place({ entry, metric }: { entry: RankedEntry; metric: Metric }) {
       >
         <span className={cn("font-display leading-tight font-bold", place === 1 ? "text-[17px]" : "text-[15px]")}>{entry.name}</span>
         <span className={cn("font-display leading-tight font-bold text-[#11885a] tabular-nums", place === 1 ? "text-[20px]" : "text-[16px]")}>
-          {formatMetric(entry.value, metric)}
+          {formatMetric(entry.value, metric, entry.volume)}
         </span>
       </div>
     </li>

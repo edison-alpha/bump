@@ -1,8 +1,12 @@
+import { api, ApiError } from "@/lib/api/client";
+import type { LeaderboardResponse } from "@/lib/api/types";
+
 export type Period = "today" | "week" | "month";
 export type Kind = "wins" | "losses";
 export type Metric = "usd" | "pct";
 
-export type Entry = { id: string; name: string; value: number; isYou?: boolean };
+/** `value` is net PnL in USD; `volume` (margin put up) is known for live entries and makes the % metric exact. */
+export type Entry = { id: string; name: string; value: number; volume?: number; isYou?: boolean };
 export type RankedEntry = Entry & { rank: number };
 
 export const PERIODS: { value: Period; label: string }[] = [
@@ -19,7 +23,7 @@ export const METRICS: { value: Metric; label: string }[] = [
 const PERIOD_SCALE: Record<Period, number> = { today: 0.4, week: 1, month: 2.6 };
 const PRACTICE_BALANCE = 1000;
 
-/** Sample data, weekly values. Replace with the leaderboard API response. */
+/** Sample data, weekly values: shown only while bump-backend cannot be reached. */
 const WINS: Entry[] = [
   { id: "nara", name: "Nara", value: 42.6 },
   { id: "kiko", name: "Kiko", value: 31.2 },
@@ -61,5 +65,20 @@ export function getLeaderboard(kind: Kind, period: Period, you: YouInput): Ranke
   return entries.map((e, i) => ({ ...e, rank: i + 1 }));
 }
 
-export const toMetric = (value: number, metric: Metric) =>
-  metric === "usd" ? value : (value / PRACTICE_BALANCE) * 100;
+export const toMetric = (value: number, metric: Metric, volume?: number) =>
+  metric === "usd" ? value : (value / (volume || PRACTICE_BALANCE)) * 100;
+
+/**
+ * The live board from bump-backend: closed on-chain trades of players who opted in, PnL read from their fills. The
+ * signed-in viewer is always in it (marked isYou) when they have trades in the period. Null when the backend cannot be
+ * reached, so the screen can fall back to the sample board.
+ */
+export async function fetchLeaderboard(kind: Kind, period: Period): Promise<RankedEntry[] | null> {
+  try {
+    const board = await api<LeaderboardResponse>(`/api/leaderboard?kind=${kind}&period=${period}`);
+    return board.entries.map((e) => ({ id: e.id, name: e.name, value: e.pnl, volume: e.volume, rank: e.rank, ...(e.isYou ? { isYou: true } : {}) }));
+  } catch (error) {
+    if (error instanceof ApiError && error.status === 0) return null;
+    throw error;
+  }
+}

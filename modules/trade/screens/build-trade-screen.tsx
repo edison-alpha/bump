@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useSideKeys } from "@/components/console/console-provider";
 import { DialField } from "@/components/console/dial-field";
 import { Screen } from "@/components/shell/screen";
@@ -14,14 +14,15 @@ import { signedUsd, usd } from "@/lib/format";
 import { useMarket } from "@/modules/market/price-provider";
 import { Coach, KeyName } from "@/modules/progress/components/coach";
 import {
-  LEVERAGE_OPTIONS,
+  capLeverage,
+  leverageChoices,
   lossAtStop,
   MARGIN_PRESETS,
   positionSize,
   profitAtTarget,
   STYLES,
+  stepLeverage,
   stepMargin,
-  stepOption,
   stepPct,
   stepStyle,
   stopPrice,
@@ -33,8 +34,6 @@ import { LimitRow, stopReadout, targetReadout } from "../components/limit-row";
 import { TradeHeader } from "../components/trade-header";
 import { useTrade } from "../trade-provider";
 
-type Leverage = (typeof LEVERAGE_OPTIONS)[number];
-
 const STYLE_TONE = {
   chill: "from-[#7fe0ff] to-[#2aa8f0]",
   spicy: "from-[#ffc35c] to-[#f28a00]",
@@ -44,9 +43,14 @@ const STYLE_TONE = {
 const STYLE_EMOJI = { chill: "🧊", spicy: "🌶️", wild: "🔥" } as const;
 
 export function BuildTradeScreen() {
-  const { draft, patchDraft, available, blocker } = useTrade();
+  const { draft, patchDraft, available, blocker, maxLeverage } = useTrade();
   const market = useMarket(draft.marketId);
   const style = styleOf(draft);
+
+  // a coin with a lower cap than the draft's leverage (picked on a 20x coin, say) pulls it down to the cap
+  useEffect(() => {
+    if (draft.leverage > maxLeverage) patchDraft({ leverage: capLeverage(draft.leverage, maxLeverage) });
+  }, [draft.leverage, maxLeverage, patchDraft]);
   const isPreset = (MARGIN_PRESETS as readonly number[]).includes(draft.margin);
   const marginRef = useRef<HTMLInputElement>(null);
   const [marginText, setMarginText] = useState<string | null>(null);
@@ -71,7 +75,7 @@ export function BuildTradeScreen() {
         label="Style"
         onStep={(dir) => {
           const next = stepStyle(draft, dir);
-          patchDraft({ leverage: next.leverage, targetPct: next.targetPct, stopPct: next.stopPct });
+          patchDraft({ leverage: capLeverage(next.leverage, maxLeverage), targetPct: next.targetPct, stopPct: next.stopPct });
         }}
         readout={{ tag: "STYLE", value: style ? style.label.toUpperCase() : "CUSTOM", sub: `${draft.leverage}x` }}
         className="flex flex-col gap-1.5"
@@ -86,7 +90,7 @@ export function BuildTradeScreen() {
                 type="button"
                 role="radio"
                 aria-checked={on}
-                onClick={() => patchDraft({ leverage: s.leverage, targetPct: s.targetPct, stopPct: s.stopPct })}
+                onClick={() => patchDraft({ leverage: capLeverage(s.leverage, maxLeverage), targetPct: s.targetPct, stopPct: s.stopPct })}
                 className={cn(
                   "flex flex-col items-center rounded-[14px] px-1 py-1.5 transition active:translate-y-0.5",
                   on
@@ -98,7 +102,7 @@ export function BuildTradeScreen() {
                   {STYLE_EMOJI[s.id]}
                 </span>
                 <span className="mt-0.5 font-display text-[15px] leading-tight font-bold">{s.label}</span>
-                <span className={cn("text-[11px] leading-tight", on ? "text-navy-900/80" : "text-white/70")}>{s.leverage}x</span>
+                <span className={cn("text-[11px] leading-tight", on ? "text-navy-900/80" : "text-white/70")}>{capLeverage(s.leverage, maxLeverage)}x</span>
               </button>
             );
           })}
@@ -185,18 +189,18 @@ export function BuildTradeScreen() {
           <DialField
             id="leverage"
             label="Leverage"
-            onStep={(dir) => patchDraft((d) => ({ leverage: stepOption(LEVERAGE_OPTIONS, d.leverage as Leverage, dir) }))}
-            readout={{ tag: "LEV", value: `${draft.leverage}x` }}
+            onStep={(dir) => patchDraft((d) => ({ leverage: stepLeverage(d.leverage, dir, maxLeverage) }))}
+            readout={{ tag: "LEV", value: `${draft.leverage}x`, sub: `max ${maxLeverage}x` }}
             className="flex flex-col gap-1.5"
           >
             <span className="flex items-center text-[15px]">
-              Leverage
-              <InfoTip text="Multiplies how much you trade, and your wins and losses with it." />
+              Leverage · up to {maxLeverage}x on {market.symbol}
+              <InfoTip text="Multiplies how much you trade, and your wins and losses with it. Every coin has its own limit." />
             </span>
             <Segmented
               tone="group"
               label="Leverage"
-              options={LEVERAGE_OPTIONS.map((v) => ({ value: v, label: `${v}x` }))}
+              options={leverageChoices(maxLeverage).map((v) => ({ value: v, label: `${v}x` }))}
               value={draft.leverage}
               onChange={(leverage) => patchDraft({ leverage })}
             />

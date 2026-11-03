@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { usePrimaryAction } from "@/components/console/console-provider";
+import { useConsole, usePrimaryAction } from "@/components/console/console-provider";
 import { Screen } from "@/components/shell/screen";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -17,17 +17,26 @@ import { useRequirePosition } from "../use-require-position";
 export function EditLimitsScreen() {
   const router = useRouter();
   const position = useRequirePosition();
-  const { updateLimits } = useTrade();
+  const { updateLimits, mode } = useTrade();
+  const { flash } = useConsole();
   const [target, setTarget] = useState<number | null>(null);
   const [stop, setStop] = useState<number | null>(null);
+  const [saving, setSaving] = useState(false);
 
   const targetPct = target ?? position?.targetPct ?? 0;
   const stopPct = stop ?? position?.stopPct ?? 0;
+  // on chain this cancels the old TP/SL and arms the new pair, so it takes a couple of transactions
   const save = () => {
-    updateLimits({ targetPct, stopPct });
-    router.back();
+    if (saving) return;
+    setSaving(true);
+    updateLimits({ targetPct, stopPct })
+      .then(() => router.back())
+      .catch((error: Error) => {
+        setSaving(false);
+        flash(error.message, "warn");
+      });
   };
-  usePrimaryAction(position ? { label: "Save limits", onPress: save } : null);
+  usePrimaryAction(position ? { label: saving ? "Saving…" : "Save limits", onPress: save, disabled: saving } : null);
 
   if (!position) return <Screen title="Edit limits">{null}</Screen>;
 
@@ -58,10 +67,12 @@ export function EditLimitsScreen() {
         <StatRow label="Stop price" value={usdPrice(stopPrice(position.entry, next))} tone="negative" />
         <StatRow label="Loss at stop" value={signedUsd(-lossAtStop(next))} tone="negative" />
       </Card>
-      <p className="text-[13px] text-white/80">Before funding and costs. Stop fills can differ.</p>
+      <p className="text-[13px] text-white/80">
+        Before funding and costs. Stop fills can differ.{mode === "chain" ? " Changing them re-sets your TP/SL on dreamDEX." : ""}
+      </p>
 
-      <Button size="lg" className="mt-auto" onClick={save}>
-        Save limits
+      <Button size="lg" className="mt-auto" onClick={save} disabled={saving}>
+        {saving ? "Saving…" : "Save limits"}
       </Button>
     </Screen>
   );

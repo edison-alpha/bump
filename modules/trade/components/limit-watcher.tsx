@@ -7,18 +7,23 @@ import { stopPrice, targetPrice } from "../calc";
 import { useTrade } from "../trade-provider";
 
 /**
- * Closes the open position when the live price touches its profit target or stop loss, on whatever screen
- * the player is on, then shows the result. The target fills at its own price (a resting limit order); the stop
- * fills at the price that crossed it, so it can slip past the stop like a real stop-market order.
+ * Watches the open position for its target or stop, on whatever screen the player is on, then shows the result.
+ *
+ * Practice trades are watched here: the target fills at its own price (a resting limit order); the stop fills at the
+ * price that crossed it, so it can slip past the stop like a real stop-market order.
+ *
+ * On chain the exchange holds the TP/SL, so nothing is decided here. When the open trade disappears without the player
+ * closing it, the stop registry fired (or the account was liquidated) and bump-backend logged it: show the result.
  */
 export function LimitWatcher() {
   const router = useRouter();
-  const { position, closePosition, ready } = useTrade();
+  const { position, closePosition, ready, mode, lastClosed, pending } = useTrade();
   const market = useMarket(position?.marketId ?? "btc");
   const closedId = useRef<string | null>(null);
+  const lastSeen = useRef<string | null>(null);
 
   useEffect(() => {
-    if (!ready || !position || closedId.current === position.id) return;
+    if (mode !== "practice" || !ready || !position || closedId.current === position.id) return;
     const price = market.price;
     const long = position.side === "long";
     const target = targetPrice(position.entry, position);
@@ -29,10 +34,18 @@ export function LimitWatcher() {
     if (!hitTarget && !hitStop) return;
 
     closedId.current = position.id;
-    if (hitTarget) closePosition(100, target, "target");
-    else closePosition(100, price, "stop");
-    router.replace("/position/closed");
-  }, [ready, position, market.price, closePosition, router]);
+    const done = hitTarget ? closePosition(100, target, "target") : closePosition(100, price, "stop");
+    void done.then(() => router.replace("/position/closed"));
+  }, [mode, ready, position, market.price, closePosition, router]);
+
+  useEffect(() => {
+    if (mode !== "chain" || !ready) return;
+    const gone = lastSeen.current;
+    lastSeen.current = position?.id ?? null;
+    // our own close navigates itself; anything else that ended the trade did it on the exchange
+    const ours = pending?.kind === "close";
+    if (gone && !position && !ours && lastClosed?.id === gone) router.replace("/position/closed");
+  }, [mode, ready, position, lastClosed?.id, pending?.kind, router]);
 
   return null;
 }

@@ -1,8 +1,13 @@
 "use client";
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, type ReactNode } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { api } from "@/lib/api/client";
+import { qk } from "@/lib/api/query";
+import type { ProgressView } from "@/lib/api/types";
 import { sfx } from "@/lib/sound";
 import { useLocalStorageState } from "@/lib/use-local-storage-state";
+import { useSession } from "@/modules/session/session-provider";
 import { useTrade } from "@/modules/trade/trade-provider";
 import { MISSIONS, XP, levelInfo, type MissionCounter } from "./rules";
 
@@ -85,8 +90,8 @@ type ProgressContextValue = {
 
 const ProgressContext = createContext<ProgressContextValue | null>(null);
 
-/** Watches the trade state and turns opens / closes into XP, missions and streak days. */
-export function ProgressProvider({ children }: { children: ReactNode }) {
+/** Guest progress: watches the practice trades and turns opens / closes into XP, missions and streak days, in localStorage. */
+function LocalProgressProvider({ children }: { children: ReactNode }) {
   const [state, setState, ready] = useLocalStorageState<ProgressState>("bump:progress", INITIAL);
   const trade = useTrade();
   const startedAt = useRef(Date.now());
@@ -185,6 +190,47 @@ export function ProgressProvider({ children }: { children: ReactNode }) {
   return <ProgressContext.Provider value={value}>{children}</ProgressContext.Provider>;
 }
 
+/**
+ * Member progress: XP, missions, streak and the tutorial flag as bump-backend computes them from the verified trade log.
+ * The browser never sends XP, so it cannot be edited here; this only reads and refreshes after every trade.
+ */
+function ServerProgressProvider({ address, children }: { address: string; children: ReactNode }) {
+  const queryClient = useQueryClient();
+  const key = qk.progress(address);
+  const query = useQuery({ queryKey: key, queryFn: () => api<ProgressView>("/api/me/progress"), staleTime: 15_000 });
+  const tutorial = useMutation({
+    mutationFn: (tutorialDone: boolean) => api("/api/me/prefs", { body: { tutorialDone } }),
+    onMutate: (tutorialDone) => queryClient.setQueryData<ProgressView>(key, (p) => (p ? { ...p, tutorialDone } : p)),
+    onSettled: () => queryClient.invalidateQueries({ queryKey: key }),
+  });
+  const { mutate: setTutorialDone } = tutorial;
+  const data = query.data;
+
+  const value = useMemo<ProgressContextValue>(
+    () => ({
+      ready: query.isSuccess,
+      xp: data?.xp ?? 0,
+      level: data?.level ?? levelInfo(0),
+      streak: data?.streak ?? 0,
+      tradedToday: data?.tradedToday ?? false,
+      missions: data?.missions ?? MISSIONS.map((m) => ({ id: m.id, label: m.label, goal: m.goal, progress: 0, done: false })),
+      tutorialActive: query.isSuccess && !data?.tutorialDone,
+      lastReward: data?.lastReward ?? null,
+      skipTutorial: () => setTutorialDone(true),
+      restartTutorial: () => setTutorialDone(false),
+    }),
+    [query.isSuccess, data, setTutorialDone],
+  );
+
+  return <ProgressContext.Provider value={value}>{children}</ProgressContext.Provider>;
+}
+
+/** Members see what the server computed; guests keep their own progress on this device. */
+export function ProgressProvider({ children }: { children: ReactNode }) {
+  const { session } = useSession();
+  if (session.status === "member" && session.address) return <ServerProgressProvider address={session.address}>{children}</ServerProgressProvider>;
+  return <LocalProgressProvider>{children}</LocalProgressProvider>;
+}
 export function useProgress() {
   const ctx = useContext(ProgressContext);
   if (!ctx) throw new Error("useProgress must be used inside <ProgressProvider>");

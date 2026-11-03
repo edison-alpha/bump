@@ -19,7 +19,7 @@ const SETS = {
     "crown-bold", "chart-2-bold", "lightbulb-bold-duotone",
   ],
   logos: ["google-icon"],
-  "token-branded": ["btc", "eth", "sol", "bnb", "xrp"],
+  "token-branded": ["btc", "eth", "sol", "bnb", "xrp", "ada", "avax", "doge", "link", "sui", "xlm", "near", "zec", "tao", "pepe", "lit"],
 };
 
 /** Solar linear icons are drawn at 1.5; the design's icons are chunkier. */

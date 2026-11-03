@@ -15,7 +15,7 @@ import { useRedirectIfSignedIn } from "../use-redirect-if-signed-in";
 
 export function WelcomeScreen() {
   const router = useRouter();
-  const { signIn, continueAsGuest } = useSession();
+  const { signInWithGoogle, continueAsGuest } = useSession();
   useRedirectIfSignedIn();
   // straight into the guided first trade; an account is offered once there's a score worth saving
   const play = () => {
@@ -58,14 +58,7 @@ export function WelcomeScreen() {
           <span className="h-px flex-1 bg-white/25" />
         </div>
         <div className="grid grid-cols-2 gap-2">
-          <GoogleButton
-            short
-            size="md"
-            onClick={() => {
-              signIn();
-              router.push("/profile-setup");
-            }}
-          />
+          <GoogleButton short size="md" onClick={() => void signInWithGoogle()} />
           <Button variant="outline" size="md" href="/sign-in" leading={<Icon name="mail" size={22} />}>
             Email
           </Button>

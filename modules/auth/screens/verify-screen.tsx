@@ -17,9 +17,11 @@ const RESEND_SECONDS = 28;
 
 export function VerifyScreen() {
   const router = useRouter();
-  const { session, signIn } = useSession();
+  const { session, ready, authError, verifyEmailCode, sendEmailCode } = useSession();
   const [code, setCode] = useState("");
   const [seconds, setSeconds] = useState(RESEND_SECONDS);
+  const [checking, setChecking] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (seconds <= 0) return;
@@ -27,12 +29,33 @@ export function VerifyScreen() {
     return () => clearTimeout(id);
   }, [seconds]);
 
-  const verify = () => {
-    if (code.length !== CODE_LENGTH) return;
-    signIn();
-    router.push(session.username ? "/home" : "/profile-setup");
+  // the code is accepted, the wallet is made and the backend knows the player: move on
+  useEffect(() => {
+    if (ready && session.status === "member") router.replace(session.username ? "/home" : "/profile-setup");
+  }, [ready, session.status, session.username, router]);
+
+  const verify = async () => {
+    if (code.length !== CODE_LENGTH || checking) return;
+    setChecking(true);
+    setError(null);
+    try {
+      await verifyEmailCode(code);
+    } catch (e) {
+      setError((e as Error).message);
+      setChecking(false);
+    }
   };
-  usePrimaryAction({ label: "Let me in", onPress: verify, disabled: code.length !== CODE_LENGTH });
+  const resend = async () => {
+    setSeconds(RESEND_SECONDS);
+    setError(null);
+    try {
+      await sendEmailCode(session.email);
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  };
+  const busy = checking && !error && !authError;
+  usePrimaryAction({ label: busy ? "Charging up…" : "Let me in", onPress: () => void verify(), disabled: code.length !== CODE_LENGTH || busy });
 
   return (
     <Screen title="Check your inbox" back="/sign-in">
@@ -46,9 +69,14 @@ export function VerifyScreen() {
       </div>
 
       <OtpInput value={code} onChange={setCode} length={CODE_LENGTH} />
+      {(error ?? authError) && (
+        <p role="alert" className="-mt-1 text-center text-sm text-coral">
+          {error ?? authError}
+        </p>
+      )}
 
-      <Button size="lg" disabled={code.length !== CODE_LENGTH} onClick={verify} trailing={<Icon name="next" size={26} />}>
-        Let me in
+      <Button size="lg" disabled={code.length !== CODE_LENGTH || busy} onClick={() => void verify()} trailing={<Icon name="next" size={26} />}>
+        {busy ? "Charging up…" : "Let me in"}
       </Button>
 
       <div className="mt-1 flex items-center gap-4 text-[13px] text-white/85">
@@ -56,7 +84,7 @@ export function VerifyScreen() {
         {seconds > 0 ? (
           <span>New code in {seconds}s</span>
         ) : (
-          <button type="button" className="font-semibold text-cyan" onClick={() => setSeconds(RESEND_SECONDS)}>
+          <button type="button" className="font-semibold text-cyan" onClick={() => void resend()}>
             Send a new code
           </button>
         )}

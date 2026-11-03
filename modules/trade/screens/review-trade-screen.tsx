@@ -11,13 +11,11 @@ import { StatRow } from "@/components/ui/stat-row";
 import { usd, usdPrice } from "@/lib/format";
 import { useMarket } from "@/modules/market/price-provider";
 import { useSession } from "@/modules/session/session-provider";
-import { LEVERAGE_OPTIONS, positionSize, stepMargin, stepOption, stepPct, stopPrice, targetPrice } from "../calc";
+import { positionSize, stepLeverage, stepMargin, stepPct, stopPrice, targetPrice } from "../calc";
 import { KeyHint } from "../components/key-hint";
 import { stopReadout, targetReadout } from "../components/limit-row";
 import { TradeHeader } from "../components/trade-header";
 import { useTrade } from "../trade-provider";
-
-type Leverage = (typeof LEVERAGE_OPTIONS)[number];
 
 /** A stat row the wheel can turn; tapping it selects it (the mini LCD shows which one is selected). */
 function DialRow({ id, label, value, tone, onStep, readout }: Dial & { id: string; value: string; tone?: "positive" | "negative" }) {
@@ -30,7 +28,7 @@ function DialRow({ id, label, value, tone, onStep, readout }: Dial & { id: strin
 }
 
 export function ReviewTradeScreen() {
-  const { draft, patchDraft, available, blocker } = useTrade();
+  const { draft, patchDraft, available, blocker, maxLeverage } = useTrade();
   const { session } = useSession();
   const market = useMarket(draft.marketId);
   const entry = market.price;
@@ -51,7 +49,7 @@ export function ReviewTradeScreen() {
           id="leverage"
           label="Leverage"
           value={`${draft.leverage}x`}
-          onStep={(dir) => patchDraft((d) => ({ leverage: stepOption(LEVERAGE_OPTIONS, d.leverage as Leverage, dir) }))}
+          onStep={(dir) => patchDraft((d) => ({ leverage: stepLeverage(d.leverage, dir, maxLeverage) }))}
           readout={{ tag: "LEV", value: `${draft.leverage}x`, sub: usd(positionSize(draft)) }}
         />
         <DialRow

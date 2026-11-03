@@ -22,9 +22,9 @@ Rencana ini tetap berlaku untuk mainnet (bonus $200 jika order di mainnet ≤30 
 |---|---|---|
 | UX | Perombakan alur & tombol konsol (rincian di bawah) | ✅ Selesai, belum di-commit |
 | 0 | Spike on-chain | ⏳ Butuh private key testnet + STT |
-| 1 | bump-packages | ⏳ |
-| 2 | bump-backend | ⏳ |
-| 3 | Frontend → on-chain | ⏳ |
+| 1 | bump-packages | ✅ shared, api-types, dreamdex (order, fill dari receipt, reader indexer), testkit (20 test) |
+| 2 | bump-backend | ✅ auth Privy, profil, impor tamu, trade log diverifikasi dari fill (entry/exit/PnL/alasan dihitung server, close parsial), watcher TP/SL/likuidasi + web push, progress di server, leaderboard dari PnL on-chain, faucet (15 test). Cron equity diganti PnL per close (equity tercampur voucher/deposit) |
+| 3 | Frontend → on-chain | ✅ Selesai kode: Privy + sesi backend, harga mark live + candle dreamDEX, 21 market dengan leverage per market (5x/10x/20x, turun untuk akun voucher), `ChainTradeProvider` (order IOC, TP/SL pair, close parsial, edit limit, klaim voucher), layar progress/close/limit nyata, progress+riwayat member dari server, kartu "Charging up". Belum terbukti on-chain: penulisan (butuh wallet ber-STT, faucet sengaja ditunda) |
 | 4 | Cartridge | ⏳ |
 | 5 | Kabel Link (duel) | ⏳ |
 | 6 | Polish & komunikasi | ⏳ |

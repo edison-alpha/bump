@@ -7,13 +7,11 @@ import { TOKEN_BRANDED } from "./icon-data";
 /* Coin logos from Iconify's Web3 Icons Branded set, bundled locally. To add one: put it in scripts/fetch-icons.mjs. */
 addCollection(TOKEN_BRANDED);
 
-const LOGOS: Record<string, string> = {
-  BTC: "token-branded:btc",
-  ETH: "token-branded:eth",
-  SOL: "token-branded:sol",
-  BNB: "token-branded:bnb",
-  XRP: "token-branded:xrp",
-};
+/** Symbols with a bundled logo; the rest of dreamDEX's coins show their first letter. */
+const LOGOS: Record<string, string> = Object.fromEntries(
+  ["btc", "eth", "sol", "bnb", "xrp", "ada", "avax", "doge", "link", "sui", "xlm", "near", "zec", "tao", "lit"].map((s) => [s.toUpperCase(), `token-branded:${s}`]),
+);
+LOGOS["1000PEPE"] = "token-branded:pepe";
 
 type CoinIconProps = { symbol: string; size?: number; className?: string };
 

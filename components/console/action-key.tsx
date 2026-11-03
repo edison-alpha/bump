@@ -56,8 +56,10 @@ export function ActionKey() {
       action?.current?.onPress?.();
       return;
     }
-    closePosition(100, market.price);
-    router.replace("/position/closed");
+    // on chain the order has to fill before there is anything to show; a failure keeps the trade open and says why
+    void closePosition(100, market.price)
+      .then((closed) => closed && router.replace("/position/closed"))
+      .catch((error: Error) => deny(error.message));
   };
 
   /** A short press: never trades, only navigates or explains. */

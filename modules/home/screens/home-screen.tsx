@@ -2,7 +2,8 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { usePrimaryAction } from "@/components/console/console-provider";
+import { useConsole, usePrimaryAction } from "@/components/console/console-provider";
+import { ChargeUpCard } from "../components/charge-up-card";
 import { Icon } from "@/components/ui/icon";
 import { Screen } from "@/components/shell/screen";
 import { Avatar } from "@/components/ui/avatar";
@@ -26,13 +27,18 @@ import type { Position, Side } from "@/modules/trade/types";
 export function HomeScreen() {
   const router = useRouter();
   const { session } = useSession();
-  const { balance, position, broke, refill, patchDraft } = useTrade();
+  const { balance, position, broke, refill, refillLabel, patchDraft, mode } = useTrade();
+  const { flash } = useConsole();
+  const doRefill = () =>
+    void refill()
+      .then(() => flash("Done! You are ready to trade.", "good"))
+      .catch((error: Error) => flash(error.message, "warn"));
   const { restartTutorial } = useProgress();
   const markets = useMarkets();
   const name = session.name || "there";
 
-  // the coin that moved most today (by its 24h figure, so the pick doesn't flicker with every tick)
-  const hot = markets.reduce((a, b) => (Math.abs(b.change24h) > Math.abs(a.change24h) ? b : a));
+  // the coin that moved most over 24h (the figure drifts slowly, so the pick doesn't flicker with every tick)
+  const hot = markets.reduce((a, b) => (Math.abs(b.change) > Math.abs(a.change) ? b : a));
   const call = (side: Side) => {
     patchDraft({ marketId: hot.id, side });
     router.push("/trade/build");
@@ -42,7 +48,7 @@ export function HomeScreen() {
     position
       ? { label: "Check my trade", href: "/position" }
       : broke
-        ? { label: "Refill", onPress: refill }
+        ? { label: "Refill", onPress: doRefill }
         : { label: "Make a call", href: "/markets" },
   );
 
@@ -65,18 +71,20 @@ export function HomeScreen() {
 
       <Card className="relative px-3 py-2">
         <p className="flex items-center text-[14px] text-white">
-          Practice balance
-          <InfoTip text="Practice funds have no cash value. Use them to learn without risk." />
+          {mode === "chain" ? "dreamDEX balance" : "Practice balance"}
+          <InfoTip text={mode === "chain" ? "Your collateral on dreamDEX testnet. It has no cash value." : "Practice funds have no cash value. Use them to learn without risk."} />
         </p>
         <p className="text-pop font-display text-[30px] leading-tight font-bold tabular-nums">{usd(balance)}</p>
         {broke ? (
-          <Button size="sm" className="mt-1 w-auto" onClick={refill}>
-            Out of coins? Refill to {usd(1000)}
+          <Button size="sm" className="mt-1 w-auto" onClick={doRefill}>
+            Out of coins? {refillLabel}
           </Button>
         ) : (
           <CoinStack className="absolute top-1/2 right-3 w-[64px] -translate-y-1/2" />
         )}
       </Card>
+
+      <ChargeUpCard />
 
       {position ? (
         <OpenTradeCard position={position} />

@@ -15,22 +15,33 @@ const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export function EmailScreen() {
   const router = useRouter();
-  const { session, setEmail, signIn } = useSession();
+  const { session, setEmail, sendEmailCode, signInWithGoogle, authError } = useSession();
   const [value, setValue] = useState(session.email);
   const [touched, setTouched] = useState(false);
+  const [sending, setSending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const valid = EMAIL_PATTERN.test(value.trim());
 
-  const send = () => {
+  const send = async () => {
     setTouched(true);
-    if (!valid) return;
-    setEmail(value.trim());
-    router.push("/verify");
+    if (!valid || sending) return;
+    setSending(true);
+    setError(null);
+    try {
+      await sendEmailCode(value.trim());
+      setEmail(value.trim());
+      router.push("/verify");
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setSending(false);
+    }
   };
   const submit = (e: FormEvent) => {
     e.preventDefault();
-    send();
+    void send();
   };
-  usePrimaryAction({ label: "Send my code", onPress: send });
+  usePrimaryAction({ label: sending ? "Sending…" : "Send my code", onPress: () => void send(), disabled: sending });
 
   return (
     <Screen title="Sign in" back="/">
@@ -58,10 +69,15 @@ export function EmailScreen() {
             aria-invalid={touched && !valid}
           />
           {touched && !valid && <p className="mt-1 px-1 text-sm text-coral">That email looks off. Check for typos?</p>}
+          {(error ?? authError) && (
+            <p role="alert" className="mt-1 px-1 text-sm text-coral">
+              {error ?? authError}
+            </p>
+          )}
         </div>
 
-        <Button type="submit" size="lg" trailing={<Icon name="next" size={26} />}>
-          Send my code
+        <Button type="submit" size="lg" disabled={sending} trailing={<Icon name="next" size={26} />}>
+          {sending ? "Sending…" : "Send my code"}
         </Button>
 
         <div className="flex items-center gap-4 text-[13px] text-white/80">
@@ -70,13 +86,7 @@ export function EmailScreen() {
           <span className="h-px flex-1 bg-white/25" />
         </div>
 
-        <GoogleButton
-          size="lg"
-          onClick={() => {
-            signIn();
-            router.push("/profile-setup");
-          }}
-        />
+        <GoogleButton size="lg" onClick={() => void signInWithGoogle()} />
       </form>
     </Screen>
   );

@@ -1,6 +1,11 @@
 "use client";
 
 import { useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { qk } from "@/lib/api/query";
+import { disablePush, enablePush, pushEnabled, pushSupported } from "@/lib/push";
+import { useConsole } from "@/components/console/console-provider";
 import { Screen } from "@/components/shell/screen";
 import { Avatar } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -21,9 +26,21 @@ const EMPTY = <span className="mx-auto mt-2 block h-1 w-5 rounded-full bg-white"
 export function ProfileScreen() {
   const router = useRouter();
   const { session, setLeaderboardVisibility, signOut } = useSession();
-  const { balance, history, broke, refill } = useTrade();
+  const { balance, history, broke, refill, refillLabel, mode } = useTrade();
+  const { flash } = useConsole();
   const { level, streak, restartTutorial } = useProgress();
   const guest = session.status === "guest";
+  const queryClient = useQueryClient();
+  const [canPush, setCanPush] = useState(false);
+  useEffect(() => setCanPush(pushSupported()), []);
+  const push = useQuery({ queryKey: qk.push, queryFn: pushEnabled, enabled: canPush && !guest, staleTime: Infinity });
+  const pushToggle = useMutation({
+    mutationFn: async (on: boolean) => (on ? enablePush() : disablePush().then(() => false)),
+    onMutate: (on) => queryClient.setQueryData(qk.push, on),
+    onSettled: () => queryClient.invalidateQueries({ queryKey: qk.push }),
+  });
+  const pushOn = push.data ?? false;
+  const togglePush = (on: boolean) => pushToggle.mutate(on);
 
   const wins = history.filter((t) => t.pnl > 0).length;
 
@@ -42,13 +59,13 @@ export function ProfileScreen() {
 
       <Card className="relative px-3 py-2">
         <p className="flex items-center text-[14px]">
-          Practice balance
-          <InfoTip text="Practice funds have no cash value." />
+          {mode === "chain" ? "dreamDEX balance" : "Practice balance"}
+          <InfoTip text={mode === "chain" ? "Your collateral on dreamDEX testnet. It has no cash value." : "Practice funds have no cash value."} />
         </p>
         <p className="text-pop font-display text-[32px] leading-tight font-bold tabular-nums">{usd(balance)}</p>
         {broke ? (
-          <Button size="sm" className="mt-1 w-auto" onClick={refill}>
-            Refill to {usd(1000)}
+          <Button size="sm" className="mt-1 w-auto" onClick={() => void refill().catch((error: Error) => flash(error.message, "warn"))}>
+            {refillLabel}
           </Button>
         ) : (
           <CoinStack className="absolute top-1/2 right-3 w-[68px] -translate-y-1/2" />
@@ -80,6 +97,13 @@ export function ProfileScreen() {
             control={<Toggle checked={session.showOnLeaderboard} onChange={setLeaderboardVisibility} label="Show me on the leaderboard" />}
           />
         )}
+        {!guest && canPush && (
+          <MenuRow
+            icon="bell"
+            label="Tell me when a trade closes"
+            control={<Toggle checked={pushOn} onChange={togglePush} label="Tell me when a trade closes" />}
+          />
+        )}
         <MenuRow
           icon="book"
           label="Replay the guided trade"
@@ -92,8 +116,9 @@ export function ProfileScreen() {
           icon="logout"
           label={guest ? "Leave guest mode" : "Sign out"}
           danger
-          onClick={() => {
-            signOut();
+          onClick={async () => {
+            if (pushOn) await disablePush();
+            await signOut();
             router.replace("/");
           }}
         />

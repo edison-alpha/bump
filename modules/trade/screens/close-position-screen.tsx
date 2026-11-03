@@ -2,7 +2,8 @@
 
 import { useRouter } from "next/navigation";
 import { useRef, useState } from "react";
-import { usePrimaryAction } from "@/components/console/console-provider";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
+import { useConsole, usePrimaryAction } from "@/components/console/console-provider";
 import { DialField } from "@/components/console/dial-field";
 import { Screen } from "@/components/shell/screen";
 import { Button } from "@/components/ui/button";
@@ -25,20 +26,40 @@ export function ClosePositionScreen() {
   const router = useRouter();
   const closing = useRef(false);
   const position = useRequirePosition(!closing.current);
-  const { closePosition } = useTrade();
+  const { closePosition, previewClose, mode } = useTrade();
+  const { flash } = useConsole();
   const market = useMarket(position?.marketId ?? "btc");
   const [percent, setPercent] = useState<number>(100);
+  const [busy, setBusy] = useState(false);
+
+  // on chain the exchange prices the close itself, funding and fees included
+  const preview = useQuery({
+    queryKey: ["bump", "chain", "preview", position?.id, percent],
+    queryFn: () => previewClose(percent),
+    enabled: mode === "chain" && !!position && !busy,
+    refetchInterval: 5_000,
+    placeholderData: keepPreviousData,
+  });
 
   const confirm = () => {
+    if (busy) return;
+    setBusy(true);
     closing.current = true;
-    closePosition(percent, market.price);
-    router.replace("/position/closed");
+    closePosition(percent, market.price)
+      .then(() => router.replace("/position/closed"))
+      .catch((error: Error) => {
+        closing.current = false;
+        setBusy(false);
+        flash(error.message, "warn");
+      });
   };
-  usePrimaryAction(position ? { label: `Close ${percent}%`, onPress: confirm } : null);
+  usePrimaryAction(position ? { label: busy ? "Closing…" : `Close ${percent}%`, onPress: confirm, disabled: busy } : null);
 
   if (!position) return <Screen title="Close trade">{null}</Screen>;
 
-  const grossProfit = round2(unrealizedPnl(position, position.entry, market.price) * (percent / 100));
+  const estimate = round2(unrealizedPnl(position, position.entry, market.price) * (percent / 100));
+  const exact = preview.data ?? null;
+  const grossProfit = exact ?? estimate;
 
   return (
     <Screen title="Close trade">
@@ -96,7 +117,7 @@ export function ClosePositionScreen() {
           label={
             <>
               {grossProfit >= 0 ? "You’d win" : "You’d lose"}
-              <InfoTip text="If you closed at this price. The final number depends on the fill." />
+              <InfoTip text={exact !== null ? "What dreamDEX says you'd get after funding and fees. The fill can differ a little." : "If you closed at this price. The final number depends on the fill."} />
             </>
           }
           value={<span className="text-[20px]">{signedUsd(grossProfit)}</span>}
@@ -106,8 +127,8 @@ export function ClosePositionScreen() {
 
       <KeyHint action="close" />
       <div className="flex flex-col gap-2">
-        <Button variant="danger" size="lg" className="rounded-[18px] text-[20px]" onClick={confirm}>
-          Close {percent}%
+        <Button variant="danger" size="lg" className="rounded-[18px] text-[20px]" onClick={confirm} disabled={busy}>
+          {busy ? "Closing…" : `Close ${percent}%`}
         </Button>
         <Button variant="light" size="lg" className="rounded-[18px] text-[20px] font-bold" onClick={() => router.back()}>
           Keep it running

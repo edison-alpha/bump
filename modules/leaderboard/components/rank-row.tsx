@@ -48,7 +48,7 @@ export function RankRow({ entry, metric, medals = false }: RankRowProps) {
           entry.isYou ? "text-mint" : positive ? "text-mint" : "text-coral",
         )}
       >
-        {formatMetric(entry.value, metric)}
+        {formatMetric(entry.value, metric, entry.volume)}
       </span>
     </li>
   );
