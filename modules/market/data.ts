@@ -28,6 +28,7 @@ const NAMES: Record<string, string> = {
   NEAR: "NEAR Protocol",
   ZEC: "Zcash",
   TAO: "Bittensor",
+  LIT: "Lighter",
   HYPE: "Hyperliquid",
   WLD: "Worldcoin",
   ZRO: "LayerZero",
