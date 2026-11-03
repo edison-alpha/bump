@@ -5,9 +5,10 @@ import { useEffect, useRef } from "react";
 import { useSession } from "@/modules/session/session-provider";
 
 /**
- * On public auth screens: send people who already have a profile straight to Home, and a member without one (back from
- * Google sign-in, say) to profile setup. Checked once, when the session settles, so signing in or starting as a guest on
- * this screen goes wherever that action navigates.
+ * On public auth screens: send people who already have a profile straight to Home, and a member without one to profile
+ * setup. When the screen first opens that covers guests and returning members. After that only a member is acted on:
+ * signing in while the screen is open (coming back from Google lands on "/" before the session exists) must move on,
+ * while starting as a guest on this screen goes wherever that action navigates.
  */
 export function useRedirectIfSignedIn() {
   const { session, ready } = useSession();
@@ -15,9 +16,12 @@ export function useRedirectIfSignedIn() {
   const checked = useRef(false);
 
   useEffect(() => {
-    if (!ready || checked.current) return;
+    if (!ready) return;
+    const first = !checked.current;
     checked.current = true;
-    if (session.status === "guest" || (session.status === "member" && session.username)) router.replace("/home");
-    else if (session.status === "member") router.replace("/profile-setup");
+    const member = session.status === "member";
+    if (!first && !member) return;
+    if (member) router.replace(session.username ? "/home" : "/profile-setup");
+    else if (first && session.status === "guest") router.replace("/home");
   }, [ready, session.status, session.username, router]);
 }

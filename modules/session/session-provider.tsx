@@ -98,8 +98,8 @@ function GuestSessionProvider({ children }: { children: ReactNode }) {
 
 function PrivySessionProvider({ children }: { children: ReactNode }) {
   const [session, setSession, stored] = useLocalStorageState<Session>("bump:session", EMPTY);
-  const { ready: privyReady, authenticated, user, getAccessToken, logout } = usePrivy();
-  const { wallets } = useWallets();
+  const { ready: privyReady, authenticated, user, getAccessToken, logout, createWallet } = usePrivy();
+  const { wallets, ready: walletsReady } = useWallets();
   const { sendCode, loginWithCode } = useLoginWithEmail();
   const { initOAuth } = useLoginWithOAuth();
   const queryClient = useQueryClient();
@@ -146,10 +146,30 @@ function PrivySessionProvider({ children }: { children: ReactNode }) {
     exchangeFor(address);
   }, [stored, privyReady, authenticated, address, exchangeFor]);
 
+  // The Privy dashboard can have "create wallet on login" off, and the client setting is not always honoured: if the
+  // player is signed in and no embedded wallet shows up, create it here. Without a wallet nothing else can proceed.
+  const creating = useRef(false);
+  useEffect(() => {
+    if (!stored || !privyReady || !authenticated || !walletsReady || address || creating.current) return;
+    creating.current = true;
+    createWallet().catch((error: Error) => {
+      // "already has one" means the wallet is on its way into the list: nothing to report
+      if (!/already/i.test(error.message)) setAuthError("Couldn't set up your wallet. Reload the page and try again.");
+    });
+  }, [stored, privyReady, authenticated, walletsReady, address, createWallet]);
+
+  // and if there is still no wallet after a while, say so instead of waiting in silence
+  useEffect(() => {
+    if (!authenticated || address) return;
+    const id = setTimeout(() => setAuthError((e) => e ?? "Your wallet is taking too long to set up. Reload the page and try again."), 25_000);
+    return () => clearTimeout(id);
+  }, [authenticated, address]);
+
   // the Privy session ended elsewhere (expired, logged out in another tab): this device is no longer a member
   useEffect(() => {
     if (stored && privyReady && !authenticated && session.status === "member") {
       exchanged.current = null;
+      creating.current = false;
       setSession(EMPTY);
     }
   }, [stored, privyReady, authenticated, session.status, setSession]);
@@ -213,6 +233,7 @@ function PrivySessionProvider({ children }: { children: ReactNode }) {
 
   const signOut = useCallback(async () => {
     exchanged.current = null;
+    creating.current = false;
     setSession(EMPTY);
     queryClient.removeQueries({ queryKey: qk.all });
     if (!authenticated) return;

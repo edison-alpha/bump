@@ -1,6 +1,12 @@
 import type { ApiError as ApiErrorBody } from "./types";
 
-export const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3300";
+/**
+ * Where the browser sends API calls. Production uses the app's own origin: next.config.ts proxies /api/* to bump-backend,
+ * so the session cookie is first-party. A cross-site cookie is dropped by Safari and iOS home-screen apps, which would
+ * leave a signed-in player with every call after sign-in answered 401. Only a local backend URL is used directly.
+ */
+const configured = process.env.NEXT_PUBLIC_API_URL ?? "";
+export const API_URL = /^https?:\/\/(localhost|127\.0\.0\.1)(:|\/|$)/.test(configured) ? configured : process.env.NODE_ENV === "production" ? "" : "http://localhost:3300";
 
 /** A failed call to bump-backend. `message` is the server's own line, written to be shown to the player. */
 export class ApiError extends Error {
