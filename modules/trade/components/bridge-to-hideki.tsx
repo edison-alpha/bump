@@ -54,7 +54,10 @@ export function BridgeToHideki() {
           try {
             return await run();
           } catch (error) {
-            throw new Error(`${name}: ${shortError(error)}`);
+            // shortError turns anything it doesn't know into a generic retry line; for a bridge the node's own words matter
+            const known = shortError(error);
+            const raw = error as { shortMessage?: string; message?: string };
+            throw new Error(`${name}: ${known === "Cancelled" ? known : (raw.shortMessage ?? raw.message ?? known).slice(0, 140)}`);
           }
         };
         await phase("Switching network", () => privy.switchChain(ChainId.somniaShannon));
