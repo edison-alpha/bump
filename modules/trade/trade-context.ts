@@ -41,7 +41,7 @@ export type ChainSetup = {
 };
 
 export type TradeContextValue = {
-  /** "practice": local play money (guests). "chain": dreamDEX on Somnia Hideki, signed by the member's wallet. */
+  /** "practice": local play money (guests). "chain": dreamDEX on Somnia Tokyo (Hideki), signed by the member's wallet. */
   mode: "practice" | "chain";
   draft: Draft;
   position: Position | null;

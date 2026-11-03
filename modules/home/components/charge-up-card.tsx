@@ -52,8 +52,8 @@ export function ChargeUpCard() {
         <>
           <p className="text-[12px] text-white/80">
             {setup.linked
-              ? "This dreamDEX account has no USDso to trade. Send some USDso (Hideki testnet) to it."
-              : "Send USDso (Hideki testnet) to your wallet address to trade. Already have a balance in dreamDEX? Connect that account in Profile."}
+              ? "This dreamDEX account has no USDso to trade. Send some USDso (Somnia Tokyo testnet) to it."
+              : "Send USDso (Somnia Tokyo testnet) to your wallet address to trade. Already have a balance in dreamDEX? Connect that account in Profile."}
           </p>
           <div className="flex gap-3">
             {!setup.linked && (
@@ -67,7 +67,7 @@ export function ChargeUpCard() {
           </div>
         </>
       )}
-      {!hasGas && <p className="text-[12px] text-white/80">Send STT to your wallet address (Hideki testnet) to cover gas and the TP/SL fee.</p>}
+      {!hasGas && <p className="text-[12px] text-white/80">Send STT to your wallet address (Somnia Tokyo testnet) to cover gas and the TP/SL fee.</p>}
     </Card>
   );
 }

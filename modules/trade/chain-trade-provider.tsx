@@ -81,7 +81,7 @@ function writeJson(key: string, value: unknown) {
 }
 
 /**
- * Member trading on dreamDEX (Somnia Hideki). The member's embedded wallet signs every order, so holding BUMP really
+ * Member trading on dreamDEX (Somnia Tokyo (Hideki)). The member's embedded wallet signs every order, so holding BUMP really
  * trades: an IOC market order sized stake × leverage, a linked TP/SL pair armed on the stop registry, and each fill logged
  * to bump-backend, which re-reads it from the receipt before anything counts. Position, history, XP and the leaderboard
  * all come from that log; the balance and every limit come from the exchange itself.
@@ -454,7 +454,7 @@ export function ChainTradeProvider({ address, tradingAccount, children }: { addr
   // No faucet here: the balance is the player's own USDso. "Refill" re-reads it, so USDso just sent shows up at once.
   const refill = useCallback(async () => {
     await refresh();
-    throw new Error(`Send USDso (Hideki testnet) to ${account} to trade.`);
+    throw new Error(`Send USDso (Somnia Tokyo testnet) to ${account} to trade.`);
   }, [refresh, account]);
 
   const previewClose = useCallback(
