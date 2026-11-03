@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useConsole } from "@/components/console/console-provider";
 import { Card } from "@/components/ui/card";
 import { usd } from "@/lib/format";
+import { BridgeToHideki } from "@/modules/trade/components/bridge-to-hideki";
 import { MoveToAccount } from "@/modules/trade/components/move-to-account";
 import { useTrade } from "@/modules/trade/trade-provider";
 
@@ -45,11 +46,12 @@ export function ChargeUpCard() {
       <p className="font-display text-[14px] leading-tight font-bold">Charging up</p>
       <Row ok={hasGas} label="Gas (STT)" value={`${setup.gas.toFixed(2)} / ${setup.gasNeeded}`} />
       <Row ok={funded} label="USDso" value={usdsoValue} />
-      <p className="text-[11px] leading-snug text-white/70">Send {needs} to your {funded || !setup.linked ? "wallet" : "account"} on Somnia Tokyo testnet.</p>
+      <p className="text-[11px] leading-snug text-white/70">Send {needs} to your {funded || !setup.linked ? "wallet" : "account"} on Hideki Testnet (chain 50383).</p>
       <p className="text-[11px] leading-snug text-white/50">
         USDso is read from {setup.linked ? "your dreamDEX account" : "your wallet"} {shorten(setup.account)}
         {setup.linked ? `, STT from your wallet ${shorten(setup.address)}` : ""}.
       </p>
+      <BridgeToHideki />
       <MoveToAccount />
       {setup.balanceError &&<p className="text-[11px] leading-snug text-coral">Couldn&apos;t read the USDso balance. It retries every 10 seconds.</p>}
       <div className="flex gap-3">

@@ -10,6 +10,7 @@ import { Card } from "@/components/ui/card";
 import { exchange } from "@/lib/chain/exchange";
 import { useChainMarkets } from "@/lib/chain/markets";
 import { usd } from "@/lib/format";
+import { BridgeToHideki } from "@/modules/trade/components/bridge-to-hideki";
 import { MoveToAccount } from "@/modules/trade/components/move-to-account";
 import { useTrade } from "@/modules/trade/trade-provider";
 
@@ -107,6 +108,7 @@ export function WalletBalancesCard() {
         </ul>
       )}
 
+      <BridgeToHideki />
       <MoveToAccount />
 
       {canWithdraw && data?.margin && (
