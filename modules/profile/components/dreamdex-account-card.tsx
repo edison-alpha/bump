@@ -53,7 +53,7 @@ export function DreamdexAccountCard() {
     <Card className="flex flex-col gap-1.5 px-3 py-2">
       <p className="flex items-center text-[14px]">
         Use your dreamDEX account
-        <InfoTip text="Trade with the balance you already have on dreamDEX. In dreamDEX, add your bump wallet address as an owner of your account, then tap Find my account." />
+        <InfoTip text="Trade with the balance you already have on dreamDEX. Add your bump wallet address as an owner of your Somnia Account, then tap Find my account. dreamDEX's Link a bot doesn't work here: a linked bot can't set TP/SL." />
       </p>
       <p className="text-[12px] text-white/80">Bump wallet: {short(session.address)}</p>
       <div className="flex flex-wrap gap-2">

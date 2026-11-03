@@ -109,21 +109,31 @@ export function ChainTradeProvider({ address, tradingAccount, children }: { addr
   const position = useMemo(() => (open ? toPosition(open) : null), [open]);
   const history = useMemo(() => (trades.data?.history ?? []).map(toClosed), [trades.data?.history]);
 
-  // exchange reads: free collateral + equity, gas money, the house-money voucher
+  /** The perps collateral (USDso) is the market row's quote token, not the SDK address set's `collateral` entry. */
+  const collateral = markets ? (Object.values(markets)[0]?.quoteToken as Address | undefined) : undefined;
+  /** USDso sitting in the account itself, not yet deposited. The bank's equity read never counts it. */
+  const heldCollateral = useCallback(async () => {
+    if (!collateral) return 0n;
+    const [held] = await exchange().client.getBalances([{ token: collateral }], account);
+    return held ?? 0n;
+  }, [collateral, account]);
+
+  // exchange reads: free collateral + equity (bank plus USDso still in the account), gas money, the house-money voucher
   const equity = useQuery({
-    queryKey: ["bump", "chain", "equity", account],
-    enabled: !!bank,
+    queryKey: ["bump", "chain", "equity", account, collateral],
+    enabled: !!bank && !!collateral,
     refetchInterval: 10_000,
     queryFn: async () => {
       const client = exchange().client;
+      const held = await heldCollateral();
       try {
         const e = await client.getAccountEquity(account, { scope: "perps", marginBank: bank as Address });
-        return { total: e.totalEquity, free: e.equity };
+        return { total: e.totalEquity + held, free: e.equity + held };
       } catch {
         // one stale mark makes the full read throw; the bank's own answer still says what the account holds
         const total = await client.tryGetPerpAccountEquity(bank as Address, account);
         if (total === null) throw new Error("equity unavailable");
-        return { total, free: total };
+        return { total: total + held, free: total + held };
       }
     },
   });
@@ -192,9 +202,11 @@ export function ChainTradeProvider({ address, tradingAccount, children }: { addr
       const r = row as NonNullable<typeof row>;
       try {
         const order = draftToOrder(draft, r, live.price);
-        const max = await exchange().client.getMaxPerpOrderSize({ pool: r.poolAddress, marginBank: r.marginBank as Address, account, isBid: order.isBid, price: order.price });
+        // autoPull: the account sends its own orders, so the pool tops the bank up from its USDso
+        const max = await exchange().client.getMaxPerpOrderSize({ pool: r.poolAddress, marginBank: r.marginBank as Address, account, isBid: order.isBid, price: order.price, autoPull: true });
         if (!max.priceable) return { error: "Price feed paused, try again." };
-        if (order.quantity > max.maxQuantity) return { error: `Not enough balance for ${usd(draft.margin)} at ${draft.leverage}x. You have ${usd(available)} free.` };
+        // an allowance short of the balance is not a blocker: opening deposits the held USDso, which approves the bank
+        if (order.quantity > max.maxQuantity && max.limitedBy !== "walletAllowance") return { error: `Not enough balance for ${usd(draft.margin)} at ${draft.leverage}x. You have ${usd(available)} free.` };
         return { error: null };
       } catch (error) {
         return { error: error instanceof OrderError ? `${error.message}.` : null };
@@ -263,9 +275,10 @@ export function ChainTradeProvider({ address, tradingAccount, children }: { addr
   }, [wallets, address, wallet, account, tradingAccount]);
 
   const markOf = useCallback(async (r: NonNullable<typeof row>) => {
-    const state = await exchange().client.getPerpState(r.poolAddress);
-    if (!state.markPriceOk) throw new Error("Price feed paused, try again.");
-    return humanPrice(state.markPrice, r);
+    // the feed read survives a dead oracle (getPerpState reverts instead), and an "ok" zero mark is not a price
+    const feed = await exchange().client.getPerpFeedStatus(r.poolAddress);
+    if (!feed.markPriceOk || feed.markPrice <= 0n) throw new Error("Price feed paused, try again.");
+    return humanPrice(feed.markPrice, r);
   }, []);
 
   /** Arms a TP/SL pair for `t` and remembers the stop ids. Resolves their ids. */
@@ -311,6 +324,9 @@ export function ChainTradeProvider({ address, tradingAccount, children }: { addr
       setPending({ kind: "open", step: "fill", txHash: null, error: null, warning: null });
       try {
         const trader = await signer();
+        // USDso still in the account goes into the MarginBank first; the deposit also approves the bank, so later orders can pull
+        const held = await heldCollateral();
+        if (held > 0n) await trader.depositMargin({ marginBank: row.marginBank as Address, amount: held });
         const order = draftToOrder(draft, row, await markOf(row));
         const placed = await trader.placePerpOrder(order);
         if (placed.fills.length === 0) throw new Error("No fill at this price. Nothing was opened, try again.");
@@ -348,7 +364,7 @@ export function ChainTradeProvider({ address, tradingAccount, children }: { addr
         busy.current = false;
       }
     },
-    [blocker, row, draft, signer, markOf, armStops, address, queryClient, refresh, step],
+    [blocker, row, draft, signer, heldCollateral, markOf, armStops, address, queryClient, refresh, step],
   );
 
   const closePosition = useCallback(
