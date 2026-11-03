@@ -5,6 +5,7 @@ import { useLoginWithEmail, useLoginWithOAuth, usePrivy, useWallets } from "@pri
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { api, ApiError } from "@/lib/api/client";
 import { qk } from "@/lib/api/query";
+import { PRIVY_CONFIGURED } from "@/lib/privy-config";
 import type { GuestImportRequest, SessionResponse } from "@/lib/api/types";
 import { useLocalStorageState } from "@/lib/use-local-storage-state";
 
@@ -57,7 +58,45 @@ function guestData(): GuestImportRequest {
 
 const message = (error: unknown, fallback: string) => (error instanceof ApiError ? error.message : fallback);
 
+/** The real thing when Privy is configured; guest-only (sign-in says so) when it is not. */
 export function SessionProvider({ children }: { children: ReactNode }) {
+  return PRIVY_CONFIGURED ? <PrivySessionProvider>{children}</PrivySessionProvider> : <GuestSessionProvider>{children}</GuestSessionProvider>;
+}
+
+/** No Privy on this deploy: guests play as usual and every sign-in path explains why it is unavailable. */
+function GuestSessionProvider({ children }: { children: ReactNode }) {
+  const [session, setSession, stored] = useLocalStorageState<Session>("bump:session", EMPTY);
+  const [authError, setAuthError] = useState<string | null>(null);
+  const unavailable = "Sign-in isn't set up on this site yet. You can still play as a guest.";
+
+  const value = useMemo<SessionContextValue>(
+    () => ({
+      // a member session stored by an earlier deploy cannot be honoured without Privy
+      session: session.status === "member" ? EMPTY : session,
+      ready: stored,
+      authError,
+      setEmail: (email) => setSession((s) => ({ ...s, email })),
+      sendEmailCode: async () => {
+        throw new Error(unavailable);
+      },
+      verifyEmailCode: async () => {
+        throw new Error(unavailable);
+      },
+      signInWithGoogle: async () => setAuthError(unavailable),
+      continueAsGuest: () => setSession({ ...EMPTY, status: "guest", name: "Guest" }),
+      saveProfile: async () => {
+        throw new Error(unavailable);
+      },
+      setLeaderboardVisibility: () => undefined,
+      signOut: async () => setSession(EMPTY),
+    }),
+    [session, stored, authError, setSession],
+  );
+
+  return <SessionContext.Provider value={value}>{children}</SessionContext.Provider>;
+}
+
+function PrivySessionProvider({ children }: { children: ReactNode }) {
   const [session, setSession, stored] = useLocalStorageState<Session>("bump:session", EMPTY);
   const { ready: privyReady, authenticated, user, getAccessToken, logout } = usePrivy();
   const { wallets } = useWallets();
