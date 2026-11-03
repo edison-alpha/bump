@@ -6,7 +6,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { api, ApiError } from "@/lib/api/client";
 import { qk } from "@/lib/api/query";
 import { PRIVY_CONFIGURED } from "@/lib/privy-config";
-import type { GuestImportRequest, SessionResponse } from "@/lib/api/types";
+import type { GuestImportRequest, SessionResponse, TradingAccountRequest } from "@/lib/api/types";
 import { useLocalStorageState } from "@/lib/use-local-storage-state";
 
 export type Session = {
@@ -17,11 +17,13 @@ export type Session = {
   showOnLeaderboard: boolean;
   /** The member's embedded wallet; empty for guests. */
   address: string;
+  /** The dreamDEX smart account the member trades through; null means the embedded wallet trades itself. */
+  tradingAccount: string | null;
 };
 
 export type ProfileInput = Pick<Session, "name" | "username" | "showOnLeaderboard">;
 
-const EMPTY: Session = { status: "signed-out", email: "", name: "", username: "", showOnLeaderboard: false, address: "" };
+const EMPTY: Session = { status: "signed-out", email: "", name: "", username: "", showOnLeaderboard: false, address: "", tradingAccount: null };
 
 type SessionContextValue = {
   session: Session;
@@ -39,6 +41,8 @@ type SessionContextValue = {
   continueAsGuest: () => void;
   /** Saves name, username and visibility on the server. Throws ApiError (409 when the username is taken). */
   saveProfile: (profile: ProfileInput) => Promise<void>;
+  /** Trades through a dreamDEX smart account (null: back to the embedded wallet). Throws ApiError with the server's reason. */
+  linkTradingAccount: (account: string | null) => Promise<void>;
   setLeaderboardVisibility: (visible: boolean) => void;
   signOut: () => Promise<void>;
 };
@@ -87,6 +91,9 @@ function GuestSessionProvider({ children }: { children: ReactNode }) {
       saveProfile: async () => {
         throw new Error(unavailable);
       },
+      linkTradingAccount: async () => {
+        throw new Error(unavailable);
+      },
       setLeaderboardVisibility: () => undefined,
       signOut: async () => setSession(EMPTY),
     }),
@@ -128,6 +135,7 @@ function PrivySessionProvider({ children }: { children: ReactNode }) {
         username: me.username,
         showOnLeaderboard: me.showOnLeaderboard,
         address: me.address,
+        tradingAccount: me.tradingAccount,
       }));
       setAuthError(null);
       void queryClient.invalidateQueries({ queryKey: qk.all });
@@ -222,6 +230,17 @@ function PrivySessionProvider({ children }: { children: ReactNode }) {
   const { mutateAsync: saveProfileAsync } = profileMutation;
   const saveProfile = useCallback(async (profile: ProfileInput) => void (await saveProfileAsync(profile)), [saveProfileAsync]);
 
+  const accountMutation = useMutation({
+    mutationFn: (account: string | null) => api<SessionResponse>("/api/me/account", { body: { account } satisfies TradingAccountRequest }),
+    onSuccess: ({ user: me }) => {
+      setSession((s) => ({ ...s, tradingAccount: me?.tradingAccount ?? null }));
+      // the balance, position and limits all belong to the other account now
+      void queryClient.invalidateQueries({ queryKey: ["bump", "chain"] });
+    },
+  });
+  const { mutateAsync: linkAccountAsync } = accountMutation;
+  const linkTradingAccount = useCallback(async (account: string | null) => void (await linkAccountAsync(account)), [linkAccountAsync]);
+
   // optimistic: the toggle flips at once and flips back if the server refuses
   const visibilityMutation = useMutation({
     mutationFn: (showOnLeaderboard: boolean) => api("/api/me/prefs", { body: { showOnLeaderboard } }),
@@ -245,8 +264,8 @@ function PrivySessionProvider({ children }: { children: ReactNode }) {
   const ready = stored && privyReady && !exchange.isPending && !settling;
 
   const value = useMemo(
-    () => ({ session, ready, authError, setEmail, sendEmailCode, verifyEmailCode, signInWithGoogle, continueAsGuest, saveProfile, setLeaderboardVisibility, signOut }),
-    [session, ready, authError, setEmail, sendEmailCode, verifyEmailCode, signInWithGoogle, continueAsGuest, saveProfile, setLeaderboardVisibility, signOut],
+    () => ({ session, ready, authError, setEmail, sendEmailCode, verifyEmailCode, signInWithGoogle, continueAsGuest, saveProfile, linkTradingAccount, setLeaderboardVisibility, signOut }),
+    [session, ready, authError, setEmail, sendEmailCode, verifyEmailCode, signInWithGoogle, continueAsGuest, saveProfile, linkTradingAccount, setLeaderboardVisibility, signOut],
   );
 
   return <SessionContext.Provider value={value}>{children}</SessionContext.Provider>;

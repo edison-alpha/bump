@@ -27,7 +27,12 @@ export type PendingTrade = {
 
 /** What a member still needs before trading on chain. Null in practice mode. */
 export type ChainSetup = {
+  /** The sign-in wallet: signs and pays gas, so STT goes here. */
   address: string;
+  /** Where the balance and positions live: the linked dreamDEX smart account, or the wallet itself. USDso goes here. */
+  account: string;
+  /** Trading through a linked dreamDEX smart account. */
+  linked: boolean;
   /** STT in the wallet, for gas and the TP/SL trigger fee. */
   gas: number;
   gasNeeded: number;

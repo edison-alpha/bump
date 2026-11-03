@@ -86,7 +86,7 @@ function writeJson(key: string, value: unknown) {
  * to bump-backend, which re-reads it from the receipt before anything counts. Position, history, XP and the leaderboard
  * all come from that log; the balance and every limit come from the exchange itself.
  */
-export function ChainTradeProvider({ address, children }: { address: string; children: ReactNode }) {
+export function ChainTradeProvider({ address, tradingAccount, children }: { address: string; tradingAccount: string | null; children: ReactNode }) {
   const queryClient = useQueryClient();
   const { wallets } = useWallets();
   const { data: markets } = useChainMarkets();
@@ -94,7 +94,10 @@ export function ChainTradeProvider({ address, children }: { address: string; chi
   const [pending, setPending] = useState<PendingTrade | null>(null);
   const [receipt, setReceipt] = useState<ClosedTrade | null>(null);
   const busy = useRef(false);
-  const account = address as Address;
+  /** The sign-in wallet: signs, sends, and pays gas. */
+  const wallet = address as Address;
+  /** Whose balance and positions these are: the player's dreamDEX smart account when linked, else the wallet itself. */
+  const account = (tradingAccount ?? address) as Address;
   const bank = markets ? (Object.values(markets)[0]?.marginBank as Address | undefined) : undefined;
 
   const trades = useQuery({
@@ -108,7 +111,7 @@ export function ChainTradeProvider({ address, children }: { address: string; chi
 
   // exchange reads: free collateral + equity, gas money, the house-money voucher
   const equity = useQuery({
-    queryKey: ["bump", "chain", "equity", address],
+    queryKey: ["bump", "chain", "equity", account],
     enabled: !!bank,
     refetchInterval: 10_000,
     queryFn: async () => {
@@ -127,10 +130,11 @@ export function ChainTradeProvider({ address, children }: { address: string; chi
   const gas = useQuery({
     queryKey: ["bump", "chain", "gas", address],
     refetchInterval: 15_000,
-    queryFn: async () => Number(formatEther(await exchange().client.getNativeBalance(account))),
+    // gas is paid by the wallet that sends the transactions, even when the trades live on a smart account
+    queryFn: async () => Number(formatEther(await exchange().client.getNativeBalance(wallet))),
   });
   const voucher = useQuery({
-    queryKey: ["bump", "chain", "voucher", address],
+    queryKey: ["bump", "chain", "voucher", account],
     enabled: !!bank,
     refetchInterval: 30_000,
     queryFn: async () => {
@@ -160,7 +164,7 @@ export function ChainTradeProvider({ address, children }: { address: string; chi
 
   // the market's own cap, held lower for an account living on a voucher (its cap replaces the market's)
   const leverage = useQuery({
-    queryKey: ["bump", "chain", "leverage", address, draft.marketId],
+    queryKey: ["bump", "chain", "leverage", account, draft.marketId],
     enabled: !!row,
     staleTime: 60_000,
     queryFn: async () => {
@@ -181,7 +185,7 @@ export function ChainTradeProvider({ address, children }: { address: string; chi
   const live = useMarket(draft.marketId);
   const priceBucket = Number(live.price.toPrecision(3));
   const check = useQuery({
-    queryKey: ["bump", "chain", "check", address, draft.marketId, draft.side, draft.margin, draft.leverage, priceBucket],
+    queryKey: ["bump", "chain", "check", account, draft.marketId, draft.side, draft.margin, draft.leverage, priceBucket],
     enabled: !!row && !position && maxLeverage >= draft.leverage && draft.margin >= MIN_STAKE,
     staleTime: 4_000,
     queryFn: async (): Promise<{ error: string | null }> => {
@@ -221,8 +225,8 @@ export function ChainTradeProvider({ address, children }: { address: string; chi
                     : (check.data?.error ?? null);
 
   const setup = useMemo<ChainSetup>(
-    () => ({ address, gas: gas.data ?? 0, gasNeeded: GAS_NEEDED_STT, canClaim, grant, connected: !!markets && gas.isSuccess }),
-    [address, gas.data, gas.isSuccess, canClaim, grant, markets],
+    () => ({ address, account, linked: !!tradingAccount, gas: gas.data ?? 0, gasNeeded: GAS_NEEDED_STT, canClaim, grant, connected: !!markets && gas.isSuccess }),
+    [address, account, tradingAccount, gas.data, gas.isSuccess, canClaim, grant, markets],
   );
 
   const patchDraft = useCallback(
@@ -239,15 +243,24 @@ export function ChainTradeProvider({ address, children }: { address: string; chi
     ]);
   }, [queryClient, address]);
 
-  /** Binds this member's embedded wallet to the exchange and returns its trader. The wallet signs without a popup. */
+  /**
+   * The trader for this member. Their embedded wallet signs without a popup; with a linked dreamDEX smart account the
+   * wallet is an owner that sends the account's transactions (nothing else signs), so the account is the one trading.
+   */
   const signer = useCallback(async () => {
-    const wallet = wallets.find((w) => w.address.toLowerCase() === address.toLowerCase());
-    if (!wallet) throw new Error("Your wallet isn't ready yet. Try again in a moment.");
-    await wallet.switchChain(HIDEKI.chainId);
-    const provider = await wallet.getEthereumProvider();
-    exchange().setSigner({ walletClient: createWalletClient({ account, chain: HIDEKI.chain, transport: custom(provider) }) });
-    return exchange().trader;
-  }, [wallets, address, account]);
+    const privy = wallets.find((w) => w.address.toLowerCase() === address.toLowerCase());
+    if (!privy) throw new Error("Your wallet isn't ready yet. Try again in a moment.");
+    await privy.switchChain(HIDEKI.chainId);
+    const provider = await privy.getEthereumProvider();
+    const walletClient = createWalletClient({ account: wallet, chain: HIDEKI.chain, transport: custom(provider) });
+    if (!tradingAccount) {
+      exchange().setSigner({ walletClient });
+      return exchange().trader;
+    }
+    const { client } = exchange();
+    const owner = client.createExecutor({ walletClient });
+    return client.createTrader({ executor: client.createExecutor({ smartAccount: account, inner: owner }) });
+  }, [wallets, address, wallet, account, tradingAccount]);
 
   const markOf = useCallback(async (r: NonNullable<typeof row>) => {
     const state = await exchange().client.getPerpState(r.poolAddress);
@@ -273,7 +286,7 @@ export function ChainTradeProvider({ address, children }: { address: string; chi
       const stored = readJson<{ ids: string[] }>(stopsKey(address))?.ids ?? [];
       let listed: string[] = [];
       try {
-        listed = (await exchange().client.listPerpStopOrders({ account: address, pool: r.poolAddress, status: ["PENDING"] })).map((s) => s.orderIdRaw);
+        listed = (await exchange().client.listPerpStopOrders({ account, pool: r.poolAddress, status: ["PENDING"] })).map((s) => s.orderIdRaw);
       } catch {
         // indexer down: the stored ids still cover this device's stops
       }
@@ -286,7 +299,7 @@ export function ChainTradeProvider({ address, children }: { address: string; chi
       }
       writeJson(stopsKey(address), null);
     },
-    [address],
+    [address, account],
   );
 
   const step = useCallback((kind: PendingTrade["kind"], patch: Partial<PendingTrade>) => setPending((p) => ({ kind, step: "fill", txHash: null, error: null, warning: null, ...(p?.kind === kind ? p : {}), ...patch })), []);

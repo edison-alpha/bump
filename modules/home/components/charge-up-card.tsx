@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
 import { useConsole } from "@/components/console/console-provider";
 import { Button } from "@/components/ui/button";
@@ -29,7 +30,9 @@ export function ChargeUpCard() {
       .catch((error: Error) => flash(error.message, "warn"))
       .finally(() => setClaiming(false));
   };
-  const copy = () => navigator.clipboard?.writeText(setup.address).then(() => flash("Wallet address copied.", "good")).catch(() => undefined);
+  const copyTo = (value: string) => () => navigator.clipboard?.writeText(value).then(() => flash("Wallet address copied.", "good")).catch(() => undefined);
+  // STT pays gas from the signing wallet; USDso belongs in the account that trades (the same address unless one is linked)
+  const copy = copyTo(setup.address);
 
   return (
     <Card className="flex flex-col gap-1.5 px-3 py-2.5">
@@ -63,11 +66,20 @@ export function ChargeUpCard() {
         ) : (
           <>
             <p className="text-[12px] text-white/80">
-              dreamDEX hands out the $1,000 voucher itself, so it can&apos;t be claimed from here right now. Send USDso (Hideki testnet) to your wallet address to trade.
+              {setup.linked
+                ? "This dreamDEX account has no USDso to trade. Add some in dreamDEX, or claim the voucher there."
+                : "dreamDEX hands out the $1,000 voucher itself, so it can't be claimed from here right now. Already have a balance in dreamDEX? Connect that account in Profile, or send USDso (Hideki testnet) to your wallet address."}
             </p>
-            <button type="button" onClick={copy} className="self-start text-[13px] font-semibold text-cyan underline underline-offset-2">
-              Copy wallet address
-            </button>
+            <div className="flex gap-3">
+              {!setup.linked && (
+                <Link href="/profile" className="text-[13px] font-semibold text-cyan underline underline-offset-2">
+                  Use my dreamDEX account
+                </Link>
+              )}
+              <button type="button" onClick={copyTo(setup.account)} className="text-[13px] font-semibold text-cyan underline underline-offset-2">
+                Copy {setup.linked ? "account" : "wallet"} address
+              </button>
+            </div>
           </>
         ))}
       {!hasGas && <p className="text-[12px] text-white/80">Send STT to your wallet address (Hideki testnet) to cover gas and the TP/SL fee.</p>}

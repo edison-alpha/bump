@@ -13,6 +13,10 @@ export { MIN_STAKE, useTrade } from "./trade-context";
  */
 export function TradeProvider({ children }: { children: ReactNode }) {
   const { session } = useSession();
-  if (session.status === "member" && session.address) return <ChainTradeProvider address={session.address}>{children}</ChainTradeProvider>;
+  if (session.status === "member" && session.address) return (
+      <ChainTradeProvider address={session.address} tradingAccount={session.tradingAccount}>
+        {children}
+      </ChainTradeProvider>
+    );
   return <LocalTradeProvider>{children}</LocalTradeProvider>;
 }

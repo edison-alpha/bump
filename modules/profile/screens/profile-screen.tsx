@@ -18,6 +18,7 @@ import { usd } from "@/lib/format";
 import { useProgress } from "@/modules/progress/progress-provider";
 import { useSession } from "@/modules/session/session-provider";
 import { useTrade } from "@/modules/trade/trade-provider";
+import { DreamdexAccountCard } from "../components/dreamdex-account-card";
 import { MenuRow } from "../components/menu-row";
 
 /** Long dash used for empty stats, as in the design. */
@@ -71,6 +72,8 @@ export function ProfileScreen() {
           <CoinStack className="absolute top-1/2 right-3 w-[68px] -translate-y-1/2" />
         )}
       </Card>
+
+      {mode === "chain" && <DreamdexAccountCard />}
 
       <Card className="grid grid-cols-3 py-2 text-center">
         <div className="border-r border-white/20">
