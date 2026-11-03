@@ -224,12 +224,20 @@ function PrivySessionProvider({ children }: { children: ReactNode }) {
 
   const signInWithWallet = useCallback(() => {
     setAuthError(null);
+    // Privy refuses a second login: when it is already signed in, the missing step is the backend session, so retry that
+    if (authenticated) {
+      if (address) {
+        exchanged.current = address;
+        exchangeFor(address);
+      } else setAuthError("Your wallet isn't ready yet. Reload the page and try again.");
+      return;
+    }
     try {
       login({ loginMethods: ["wallet"] });
     } catch {
       setAuthError("Couldn't open the wallet picker. Try email instead.");
     }
-  }, [login]);
+  }, [authenticated, address, exchangeFor, login]);
 
   // no username, so a guest who signs in later is sent to profile setup (their trades and XP stay)
   const continueAsGuest = useCallback(() => setSession({ ...EMPTY, status: "guest", name: "Guest" }), [setSession]);

@@ -27,8 +27,7 @@ function Vents({ className }: { className: string }) {
 /**
  * The handheld console: screen on top, hardware deck below. The page never scrolls; only the LCD does.
  * Phones / installed PWA: full-bleed, edge to edge and under the status bar + home indicator (safe-area padding).
- * Pinned with fixed inset-0, not h-dvh: in an iOS standalone PWA 100dvh comes up a status bar short, leaving a gap at the bottom.
- * Where the web view itself stops short of the screen, see <StandaloneViewport>.
+ * Fixed to the available viewport; iOS uses the default status bar so it does not subtract its height twice.
  * Larger screens: a centered, rounded, floating device, shrunk to fit short windows, with screws and speaker slits.
  * touch-none: the bezel and deck can't be pinched or dragged; the LCD opts back into vertical panning.
  */

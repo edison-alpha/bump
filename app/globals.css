@@ -193,7 +193,7 @@ body {
 @media (max-width: 767px) {
   html,
   body {
-    /* bezel's bottom colour, so a short iOS viewport can never show a lighter strip under the deck */
+    /* Match the bottom of the bezel during launch and viewport changes. */
     background: var(--bz-3);
     height: 100%;
     overflow: hidden;
@@ -226,13 +226,6 @@ a {
   }
 }
 
-/* A short iOS web view already excludes the home indicator, but the footer still needs room. */
-@media (max-width: 767px) {
-  [data-short-viewport] .console-deck {
-    padding-bottom: 4px;
-  }
-}
-
 /* Inflated blue plastic bezel, full-bleed (phones / installed PWA): material + inner bevel only. */
 @utility console {
   background:
@@ -255,17 +248,6 @@ a {
     linear-gradient(180deg, rgb(205 225 218 / 0.34) 0%, rgb(120 150 142 / 0.2) 45%, rgb(30 60 52 / 0.18) 100%),
     url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='220' height='220' viewBox='0 0 220 220'><g fill='none' stroke='rgb(120,235,175)' stroke-opacity='.38' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M0 30h60l14 14h50'/><path d='M0 52h40l10 10h30l12-12h64l14 14h30'/><path d='M0 74h26l10 10'/><path d='M220 120h-60l-12 12h-40'/><path d='M220 142h-34l-10-10h-20'/><path d='M0 150h70l12 12h58l10-10h70'/><path d='M40 220v-40l12-12'/><path d='M64 220v-30l10-10'/><path d='M150 0v38l12 12v40'/><path d='M176 0v28l10 10v60'/><path d='M100 90v50l-12 12'/></g><g fill='rgb(224,184,74)' fill-opacity='.85'><circle cx='74' cy='44' r='3.4'/><circle cx='36' cy='84' r='3.4'/><circle cx='162' cy='50' r='3.4'/><circle cx='88' cy='152' r='3.4'/><circle cx='52' cy='168' r='3.4'/><circle cx='186' cy='38' r='3.4'/><circle cx='140' cy='132' r='3.4'/></g><g><rect x='108' y='96' width='54' height='38' rx='3' fill='rgb(12,20,18)' fill-opacity='.85' stroke='rgb(70,95,88)' stroke-width='1.5'/><g stroke='rgb(200,205,200)' stroke-opacity='.7' stroke-width='2'><path d='M114 92v4M124 92v4M134 92v4M144 92v4M154 92v4M114 134v4M124 134v4M134 134v4M144 134v4M154 134v4M104 104h4M104 114h4M104 124h4M162 104h4M162 114h4M162 124h4'/></g><circle cx='116' cy='104' r='2' fill='rgb(70,95,88)'/><rect x='14' y='176' width='26' height='18' rx='2' fill='rgb(12,20,18)' fill-opacity='.8' stroke='rgb(70,95,88)' stroke-width='1.2'/><rect x='178' y='170' width='10' height='20' rx='2' fill='rgb(210,170,70)' fill-opacity='.8'/><rect x='194' y='170' width='10' height='20' rx='2' fill='rgb(210,170,70)' fill-opacity='.8'/><circle cx='20' cy='20' r='4' fill='rgb(120,255,150)' fill-opacity='.9'/></g></svg>") 0 0 / 220px 220px,
     linear-gradient(180deg, rgb(24 92 72) 0%, rgb(14 70 55) 55%, rgb(10 54 41) 100%);
-}
-
-/* Short iOS standalone web view (see standalone-viewport.tsx): no bottom shade, so the bezel runs into the
-   #1585ee strip iOS paints below the page without a seam. */
-@media (max-width: 767px) {
-  [data-short-viewport] .console {
-    box-shadow:
-      inset 0 7px 6px -2px rgb(255 255 255 / 0.5),
-      inset 7px 0 8px -2px rgb(255 255 255 / 0.2),
-      inset -7px 0 10px -2px rgb(var(--bz-shade) / 0.25);
-  }
 }
 
 /* Larger screens: the same bezel as a free-standing device (rounded, rimmed, floating). */

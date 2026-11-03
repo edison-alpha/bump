@@ -3,7 +3,6 @@ import { Fredoka, Nunito } from "next/font/google";
 import type { ReactNode } from "react";
 import { PhoneFrame } from "@/components/shell/phone-frame";
 import { RegisterServiceWorker } from "@/components/shell/register-sw";
-import { StandaloneViewport } from "@/components/shell/standalone-viewport";
 import { SKIN_BOOT_SCRIPT } from "@/lib/skins";
 import { Providers } from "./providers";
 import "./globals.css";
@@ -15,7 +14,8 @@ export const metadata: Metadata = {
   title: { default: "bump", template: "%s · bump" },
   description: "Up or down? Practice trading crypto with play money on a pocket-sized console.",
   applicationName: "bump",
-  appleWebApp: { capable: true, title: "bump", statusBarStyle: "black-translucent" },
+  // Translucent status bars can leave an unreachable bottom strip in installed iOS apps.
+  appleWebApp: { capable: true, title: "bump", statusBarStyle: "default" },
   icons: { icon: "/icons/icon-192.png", apple: "/icons/apple-touch-icon.png" },
   formatDetection: { telephone: false },
 };
@@ -38,7 +38,6 @@ export default function RootLayout({ children }: { children: ReactNode }) {
         <script dangerouslySetInnerHTML={{ __html: SKIN_BOOT_SCRIPT }} />
       </head>
       <body>
-        <StandaloneViewport />
         <Providers>
           <PhoneFrame>{children}</PhoneFrame>
         </Providers>
