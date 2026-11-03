@@ -174,15 +174,15 @@
   --bz-glow: 80 90 110;
 }
 
-/* Phones: the console is the whole screen, so overscroll / safe areas show bezel blue, never a seam. */
+/* The top edge matches the status bar; the page continues the selected shell colours. */
 html {
-  background: var(--bz-2);
+  background: var(--bz-0);
 }
 
 body {
   min-height: 100dvh;
   overflow-x: clip;
-  background: var(--bz-2);
+  background: linear-gradient(180deg, var(--bz-0), var(--bz-3)) fixed;
   font-family: var(--font-sans);
   color: #fff;
   -webkit-tap-highlight-color: transparent;
@@ -193,19 +193,17 @@ body {
 @media (max-width: 767px) {
   html,
   body {
-    /* Match the bottom of the bezel during launch and viewport changes. */
-    background: var(--bz-3);
     height: 100%;
     overflow: hidden;
     overscroll-behavior: none;
   }
 }
 
-/* Larger screens: sky backdrop behind the free-standing device. */
+/* Larger screens: a lighter version of the selected shell behind the device. */
 @media (min-width: 768px) {
   html,
   body {
-    background: linear-gradient(180deg, #dcf3ff 0%, #a6dcff 100%) fixed;
+    background: linear-gradient(180deg, color-mix(in srgb, var(--bz-0), white 65%), color-mix(in srgb, var(--bz-1), white 55%)) fixed;
   }
 }
 
@@ -271,7 +269,7 @@ a {
 /* Dark screen recessed into the bezel: groove + light rim + inner shadow. */
 @utility screen-panel {
   border-radius: 26px;
-  background: linear-gradient(180deg, #12273f 0%, #0c1b2f 50%, #09162a 100%);
+  background: #000;
   box-shadow:
     /* groove, light inner rim, then the bezel's own shade */
     0 0 0 3px var(--bz-groove),

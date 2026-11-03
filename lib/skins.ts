@@ -5,7 +5,7 @@ export const SKINS = [
   { id: "aluminum", label: "Space aluminum", swatch: ["#f3f5f8", "#7e8590"] },
   { id: "cream", label: "Retro cream", swatch: ["#fff7e2", "#cfba8c"] },
   { id: "midnight", label: "Midnight", swatch: ["#3f5a9c", "#121e41"] },
-  { id: "tech", label: "Clear tech", swatch: ["#9fd8c3", "#0e4a38"] },
+  { id: "tech", label: "Clear tech", swatch: ["#a8c9bf", "#0c3f31"] },
   { id: "mint", label: "Pocket mint", swatch: ["#d6f7e5", "#5ec495"] },
   { id: "red", label: "Arcade red", swatch: ["#ff7d70", "#a61b18"] },
   { id: "lilac", label: "Soft lilac", swatch: ["#eee7ff", "#9b87da"] },
@@ -17,7 +17,7 @@ export type SkinId = (typeof SKINS)[number]["id"];
 export const SKIN_KEY = "bump:skin";
 
 /** Runs in <head> before first paint, so a saved skin never flashes the default blue. */
-export const SKIN_BOOT_SCRIPT = `try{var s=localStorage.getItem("${SKIN_KEY}");if(s)document.documentElement.dataset.skin=s}catch(e){}`;
+export const SKIN_BOOT_SCRIPT = `(()=>{const colors=${JSON.stringify(Object.fromEntries(SKINS.map((skin) => [skin.id, skin.swatch[0]])))};let id="blue";try{const saved=localStorage.getItem("${SKIN_KEY}");if(Object.hasOwn(colors,saved))id=saved}catch(e){}document.documentElement.dataset.skin=id;const meta=document.createElement("meta");meta.name="theme-color";meta.content=colors[id];document.head.appendChild(meta)})();`;
 
 export function currentSkin(): SkinId {
   const id = typeof document === "undefined" ? undefined : document.documentElement.dataset.skin;
@@ -26,6 +26,7 @@ export function currentSkin(): SkinId {
 
 export function setSkin(id: SkinId) {
   document.documentElement.dataset.skin = id;
+  document.querySelector('meta[name="theme-color"]')?.setAttribute("content", SKINS.find((skin) => skin.id === id)!.swatch[0]);
   try {
     localStorage.setItem(SKIN_KEY, id);
   } catch {

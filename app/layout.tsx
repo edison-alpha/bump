@@ -21,8 +21,6 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  // matches the top of the bezel so the status bar blends into the console
-  themeColor: "#86d9ff",
   width: "device-width",
   initialScale: 1,
   // it's a handheld console, not a page: no pinch zoom
