@@ -5,7 +5,7 @@ import { DEFAULT_FEES } from "@somnia-chain/markets-sdk";
 import { BridgeToken, ChainId, createBridgeTransfer, getBridgeToken, somniaShannon } from "@somnia-chain/markets-sdk/chains";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState, type ReactNode } from "react";
-import { createPublicClient, createWalletClient, custom, erc20Abi, formatUnits, http, parseUnits, type Address } from "viem";
+import { createPublicClient, createWalletClient, custom, erc20Abi, formatUnits, http, numberToHex, parseUnits, type Address } from "viem";
 import { useConsole } from "@/components/console/console-provider";
 import { Screen } from "@/components/shell/screen";
 import { Button } from "@/components/ui/button";
@@ -173,8 +173,20 @@ export function BridgeScreen() {
           throw new Error(message);
         }
       };
-      await phase("switch", "Switching network", () => privy.switchChain(ChainId.somniaShannon));
-      const walletClient = createWalletClient({ account: wallet, chain: somniaShannon, transport: custom(await privy.getEthereumProvider()) });
+      // switchChain can resolve while the provider still reports the old chain, and the transaction is then refused.
+      // Ask the provider itself too, and wait until it really answers with Somnia Testnet before anything is signed.
+      const provider = await privy.getEthereumProvider();
+      await phase("switch", "Switching network", async () => {
+        const chainIdOf = async () => Number(await provider.request({ method: "eth_chainId" }));
+        await privy.switchChain(ChainId.somniaShannon);
+        if ((await chainIdOf()) !== ChainId.somniaShannon) {
+          await provider.request({ method: "wallet_switchEthereumChain", params: [{ chainId: numberToHex(ChainId.somniaShannon) }] });
+        }
+        for (let i = 0; i < 20 && (await chainIdOf()) !== ChainId.somniaShannon; i++) await new Promise((resolve) => setTimeout(resolve, 250));
+        const now = await chainIdOf();
+        if (now !== ChainId.somniaShannon) throw new Error(`Your wallet stayed on chain ${now}. Switch it to Somnia Testnet (${ChainId.somniaShannon}) and try again.`);
+      });
+      const walletClient = createWalletClient({ account: wallet, chain: somniaShannon, transport: custom(provider) });
       // the approval has to land before the bridge call, or the transfer reverts
       for (const [stage, name, step] of [["approve", "Approving", plan.approveStep], ["send", "Bridging", plan.bridgeStep]] as const) {
         if (!step) continue;
