@@ -81,7 +81,7 @@ export function BridgeProgress({ run, explorerTx, now, onDismiss }: { run: Bridg
             View transaction
           </a>
         )}
-        {(run.stage === "done" || failed) && (
+        {(run.stage === "done" || failed || slow) && (
           <button type="button" onClick={onDismiss} className="text-white/70 underline underline-offset-2">
             Dismiss
           </button>

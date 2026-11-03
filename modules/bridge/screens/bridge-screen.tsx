@@ -5,7 +5,7 @@ import { DEFAULT_FEES } from "@somnia-chain/markets-sdk";
 import { BridgeToken, ChainId, createBridgeTransfer, getBridgeToken, somniaShannon } from "@somnia-chain/markets-sdk/chains";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState, type ReactNode } from "react";
-import { createPublicClient, createWalletClient, custom, erc20Abi, formatUnits, http, numberToHex, parseUnits, type Address } from "viem";
+import { createPublicClient, createWalletClient, custom, erc20Abi, formatUnits, http, numberToHex, parseAbi, parseUnits, type Address } from "viem";
 import { useConsole } from "@/components/console/console-provider";
 import { Screen } from "@/components/shell/screen";
 import { Button } from "@/components/ui/button";
@@ -25,6 +25,9 @@ const originClient = createPublicClient({ chain: somniaShannon, transport: http(
 const SOMNIA = { name: "Somnia Testnet", logo: "/tokens/somnia.png", plate: "bg-white" };
 const HIDEKI = { name: "Hideki Testnet", logo: "/tokens/dreamdex.png", plate: "bg-navy-950" };
 const USDSO_LOGO = "/tokens/usdso.png";
+
+const routerAbi = parseAbi(["function quoteGasPayment(uint32 destinationDomain) view returns (uint256)"]);
+const ROUTE_DOWN = "The USDso bridge route is down on Somnia's side right now (its gas hook reverts). Nothing was sent, and your USDso is safe.";
 
 const short = (address: string) => `${address.slice(0, 6)}…${address.slice(-4)}`;
 const amountOf = (value: string, max = 4) => Number(value).toLocaleString("en-US", { maximumFractionDigits: max });
@@ -93,6 +96,23 @@ export function BridgeScreen() {
   });
   const balance = held.data ?? "0";
 
+  // The USDso router's gas hook decides whether transferRemote can run at all. When it reverts, so does every bridge
+  // (the STT router has no hook and quotes 0), and the approval would be gas spent for nothing. Asking it is free.
+  const route = useQuery({
+    queryKey: ["bump", "bridge", "route", origin?.router],
+    enabled: !!origin,
+    refetchInterval: 60_000,
+    queryFn: async () => {
+      try {
+        await originClient.readContract({ address: origin?.router as Address, abi: routerAbi, functionName: "quoteGasPayment", args: [ChainId.hidekiTestnet] });
+        return true;
+      } catch {
+        return false;
+      }
+    },
+  });
+  const routeDown = route.data === false;
+
   // the bridge in flight, kept in localStorage once it is sent so a reload keeps watching for the delivery
   const storeKey = `bump:bridge:${wallet}`;
   const [run, setRun] = useState<BridgeRun | null>(null);
@@ -149,6 +169,7 @@ export function BridgeScreen() {
   const bridge = useMutation({
     mutationFn: async (amount: string) => {
       if (!setup || !wallet || !origin || !hidekiToken) throw new Error("Your wallet isn't ready yet.");
+      if (routeDown) throw new Error(ROUTE_DOWN);
       const raw = parseUnits(amount, origin.decimals);
       if (raw <= 0n) throw new Error("Enter an amount to bridge.");
       if (raw > parseUnits(balance, origin.decimals)) throw new Error(`Your wallet holds ${amountOf(balance)} USDso on Somnia Testnet.`);
@@ -192,7 +213,11 @@ export function BridgeScreen() {
         if (!step) continue;
         // gas and fees are fixed, like the SDK's own writes, so the wallet has nothing to estimate
         const hash = await phase(stage, name, () => walletClient.sendTransaction({ to: step.to, data: step.data, value: step.value, gas: BRIDGE_GAS, ...DEFAULT_FEES }));
-        await phase(stage, `${name} (confirming)`, () => originClient.waitForTransactionReceipt({ hash }));
+        await phase(stage, `${name} (confirming)`, async () => {
+          // a reverted transaction still comes back as a receipt; only "success" means the step happened
+          const receipt = await originClient.waitForTransactionReceipt({ hash });
+          if (receipt.status !== "success") throw new Error("the transaction reverted on Somnia Testnet, no USDso moved");
+        });
         if (stage === "send") update({ stage: "deliver", bridgeHash: hash });
       }
     },
@@ -274,7 +299,8 @@ export function BridgeScreen() {
           <p className="flex justify-between"><span>Network gas</span><span>STT on Somnia Testnet</span></p>
         </Card>
 
-        <Button type="submit" disabled={busy || entered <= 0 || tooMuch}>
+        {routeDown && <p className="rounded-xl bg-coral/15 px-3 py-2 text-[12px] leading-snug text-coral">{ROUTE_DOWN}</p>}
+        <Button type="submit" disabled={busy || routeDown || entered <= 0 || tooMuch}>
           {label}
         </Button>
         <p className="text-center text-[11px] leading-snug text-white/50">A test bridge with one validator. Testnet funds only.</p>
