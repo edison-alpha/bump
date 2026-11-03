@@ -38,6 +38,10 @@ export type ChainSetup = {
   gasNeeded: number;
   /** Prices and the wallet are connected; false while either is still loading. */
   connected: boolean;
+  /** The USDso balance read has not answered yet. */
+  balanceLoading: boolean;
+  /** The USDso balance read failed, so the free amount shown is unknown rather than zero. */
+  balanceError: boolean;
 };
 
 export type TradeContextValue = {
@@ -69,6 +73,8 @@ export type TradeContextValue = {
   refill: () => Promise<void>;
   /** Chain: moves free USDso out of the margin account (decimal string). Null in practice mode. */
   withdraw: ((amount: string) => Promise<void>) | null;
+  /** Chain, linked account only: sends USDso from the sign-in wallet to the dreamDEX smart account (decimal string). Null otherwise. */
+  moveToAccount: ((amount: string) => Promise<void>) | null;
   updateLimits: (limits: Pick<Position, "targetPct" | "stopPct">) => Promise<boolean>;
   /** Closes `percent` (1-100) of the open position at about `exit`, resolves the receipt. */
   closePosition: (percent: number, exit: number, reason?: CloseReason) => Promise<ClosedTrade | null>;

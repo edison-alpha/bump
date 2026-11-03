@@ -10,6 +10,7 @@ import { Card } from "@/components/ui/card";
 import { exchange } from "@/lib/chain/exchange";
 import { useChainMarkets } from "@/lib/chain/markets";
 import { usd } from "@/lib/format";
+import { MoveToAccount } from "@/modules/trade/components/move-to-account";
 import { useTrade } from "@/modules/trade/trade-provider";
 
 type Token = { address: Address; symbol: string; decimals: number };
@@ -105,6 +106,8 @@ export function WalletBalancesCard() {
           )}
         </ul>
       )}
+
+      <MoveToAccount />
 
       {canWithdraw && data?.margin && (
         <form

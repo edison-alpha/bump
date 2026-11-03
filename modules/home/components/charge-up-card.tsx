@@ -4,9 +4,12 @@ import Link from "next/link";
 import { useConsole } from "@/components/console/console-provider";
 import { Card } from "@/components/ui/card";
 import { usd } from "@/lib/format";
+import { MoveToAccount } from "@/modules/trade/components/move-to-account";
 import { useTrade } from "@/modules/trade/trade-provider";
 
-const link = "text-[12px] font-semibold text-cyan underline underline-offset-2";
+const shorten = (address: string) => `${address.slice(0, 6)}…${address.slice(-4)}`;
+
+const link ="text-[12px] font-semibold text-cyan underline underline-offset-2";
 
 function Row({ ok, label, value }: { ok: boolean; label: string; value: string }) {
   return (
@@ -30,6 +33,7 @@ export function ChargeUpCard() {
   const hasGas = setup.gas >= setup.gasNeeded;
   const funded = available >= 1;
   if (hasGas && funded) return null;
+  const usdsoValue = setup.balanceError ? "can't read" : setup.balanceLoading ? "checking…" : `${usd(available)} free`;
 
   const needs = [!funded && "USDso", !hasGas && "STT"].filter(Boolean).join(" and ");
   // STT pays gas from the signing wallet; USDso belongs in the account that trades (the same address unless one is linked)
@@ -40,8 +44,14 @@ export function ChargeUpCard() {
     <Card className="flex flex-col gap-1 px-3 py-2">
       <p className="font-display text-[14px] leading-tight font-bold">Charging up</p>
       <Row ok={hasGas} label="Gas (STT)" value={`${setup.gas.toFixed(2)} / ${setup.gasNeeded}`} />
-      <Row ok={funded} label="USDso" value={`${usd(available)} free`} />
+      <Row ok={funded} label="USDso" value={usdsoValue} />
       <p className="text-[11px] leading-snug text-white/70">Send {needs} to your {funded || !setup.linked ? "wallet" : "account"} on Somnia Tokyo testnet.</p>
+      <p className="text-[11px] leading-snug text-white/50">
+        USDso is read from {setup.linked ? "your dreamDEX account" : "your wallet"} {shorten(setup.account)}
+        {setup.linked ? `, STT from your wallet ${shorten(setup.address)}` : ""}.
+      </p>
+      <MoveToAccount />
+      {setup.balanceError &&<p className="text-[11px] leading-snug text-coral">Couldn&apos;t read the USDso balance. It retries every 10 seconds.</p>}
       <div className="flex gap-3">
         <button type="button" onClick={copy} className={link}>
           Copy address

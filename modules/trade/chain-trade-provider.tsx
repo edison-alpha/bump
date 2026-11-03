@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useWallets } from "@privy-io/react-auth";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { createWalletClient, custom, formatEther, parseUnits, type Address } from "viem";
+import { createPublicClient, createWalletClient, custom, erc20Abi, formatEther, parseUnits, type Address } from "viem";
 import { api, ApiError } from "@/lib/api/client";
 import { qk } from "@/lib/api/query";
 import type { CloseTradeResponse, OpenTradeResponse, Trade, TradesResponse } from "@/lib/api/types";
@@ -215,8 +215,17 @@ export function ChainTradeProvider({ address, tradingAccount, children }: { addr
                       : (check.data?.error ?? null);
 
   const setup = useMemo<ChainSetup>(
-    () => ({ address, account, linked: !!tradingAccount, gas: gas.data ?? 0, gasNeeded: GAS_NEEDED_STT, connected: !!markets && gas.isSuccess }),
-    [address, account, tradingAccount, gas.data, gas.isSuccess, markets],
+    () => ({
+      address,
+      account,
+      linked: !!tradingAccount,
+      gas: gas.data ?? 0,
+      gasNeeded: GAS_NEEDED_STT,
+      connected: !!markets && gas.isSuccess,
+      balanceLoading: equity.isPending,
+      balanceError: equity.isError,
+    }),
+    [address, account, tradingAccount, gas.data, gas.isSuccess, markets, equity.isPending, equity.isError],
   );
 
   const patchDraft = useCallback(
@@ -453,6 +462,36 @@ export function ChainTradeProvider({ address, tradingAccount, children }: { addr
     [bank, scale, account, signer, refresh],
   );
 
+  /**
+   * Moves USDso held by the sign-in wallet into the linked dreamDEX smart account, the one that trades. A plain ERC-20
+   * transfer signed by the wallet itself (not through the smart account). `amount` is a decimal string of USDso.
+   */
+  const moveToAccount = useCallback(
+    async (amount: string) => {
+      if (!tradingAccount || !collateral || !scale || busy.current) return;
+      busy.current = true;
+      try {
+        const raw = parseUnits(amount, scale.quoteDecimals);
+        if (raw <= 0n) throw new Error("Enter an amount to move.");
+        const [held] = await exchange().client.getBalances([{ token: collateral }], wallet);
+        if (raw > (held ?? 0n)) throw new Error(`Your wallet holds ${usd(round2(usdOf(held ?? 0n, scale)))} USDso.`);
+        const privy = wallets.find((w) => w.address.toLowerCase() === address.toLowerCase());
+        if (!privy) throw new Error("Your wallet isn't ready yet. Try again in a moment.");
+        await privy.switchChain(HIDEKI.chainId);
+        const provider = await privy.getEthereumProvider();
+        const walletClient = createWalletClient({ account: wallet, chain: HIDEKI.chain, transport: custom(provider) });
+        const hash = await walletClient.writeContract({ address: collateral, abi: erc20Abi, functionName: "transfer", args: [tradingAccount as Address, raw] });
+        await createPublicClient({ chain: HIDEKI.chain, transport: custom(provider) }).waitForTransactionReceipt({ hash });
+        await refresh();
+      } catch (error) {
+        throw new Error(shortError(error));
+      } finally {
+        busy.current = false;
+      }
+    },
+    [tradingAccount, collateral, scale, wallet, wallets, address, refresh],
+  );
+
   // No faucet here: the balance is the player's own USDso. "Refill" re-reads it, so USDso just sent shows up at once.
   const refill = useCallback(async () => {
     await refresh();
@@ -519,12 +558,13 @@ export function ChainTradeProvider({ address, tradingAccount, children }: { addr
       openPosition,
       refill,
       withdraw,
+      moveToAccount: tradingAccount ? moveToAccount : null,
       updateLimits,
       closePosition,
       previewClose,
       dismissPending,
     }),
-    [draft, position, history, trades.isPending, balance, available, broke, blocker, maxLeverage, lastClosed, pending, setup, patchDraft, openPosition, refill, withdraw, updateLimits, closePosition, previewClose, dismissPending],
+    [draft, position, history, trades.isPending, balance, available, broke, blocker, maxLeverage, lastClosed, pending, setup, patchDraft, openPosition, refill, withdraw, moveToAccount, tradingAccount, updateLimits, closePosition, previewClose, dismissPending],
   );
 
   return <TradeContext.Provider value={value}>{children}</TradeContext.Provider>;
