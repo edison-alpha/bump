@@ -36,9 +36,6 @@ export type ChainSetup = {
   /** STT in the wallet, for gas and the TP/SL trigger fee. */
   gas: number;
   gasNeeded: number;
-  /** A dreamDEX credit voucher can be claimed now (the "refill" on chain). */
-  canClaim: boolean;
-  grant: number;
   /** Prices and the wallet are connected; false while either is still loading. */
   connected: boolean;
 };
@@ -62,14 +59,16 @@ export type TradeContextValue = {
   lastClosed: ClosedTrade | null;
   pending: PendingTrade | null;
   setup: ChainSetup | null;
-  /** Label of the refill action ("Refill to $1,000" / "Claim 1,000 USDso"). */
+  /** Label of the refill action ("Refill to $1,000" / "Add USDso to trade"). */
   refillLabel: string;
   /** Accepts a patch, or a function of the latest draft (for rapid wheel steps). */
   patchDraft: (patch: Partial<Draft> | ((draft: Draft) => Partial<Draft>)) => void;
   /** Opens the draft at about `entry`. Resolves false (and opens nothing) when blocked or rejected. */
   openPosition: (entry: number) => Promise<boolean>;
-  /** Practice: tops the balance back up. Chain: claims the dreamDEX voucher. Only when broke. */
+  /** Practice: tops the balance back up. Chain: re-reads the balance and says where to send USDso. Only when broke. */
   refill: () => Promise<void>;
+  /** Chain: moves free USDso out of the margin account (decimal string). Null in practice mode. */
+  withdraw: ((amount: string) => Promise<void>) | null;
   updateLimits: (limits: Pick<Position, "targetPct" | "stopPct">) => Promise<boolean>;
   /** Closes `percent` (1-100) of the open position at about `exit`, resolves the receipt. */
   closePosition: (percent: number, exit: number, reason?: CloseReason) => Promise<ClosedTrade | null>;

@@ -121,6 +121,7 @@ export function LocalTradeProvider({ children }: { children: ReactNode }) {
       patchDraft,
       openPosition,
       refill,
+      withdraw: null,
       updateLimits,
       closePosition,
       previewClose,

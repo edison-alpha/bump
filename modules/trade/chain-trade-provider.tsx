@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useWallets } from "@privy-io/react-auth";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { createPublicClient, createWalletClient, custom, encodeFunctionData, formatEther, http, parseAbi, type Address } from "viem";
+import { createWalletClient, custom, formatEther, parseUnits, type Address } from "viem";
 import { api, ApiError } from "@/lib/api/client";
 import { qk } from "@/lib/api/query";
 import type { CloseTradeResponse, OpenTradeResponse, Trade, TradesResponse } from "@/lib/api/types";
@@ -143,33 +143,11 @@ export function ChainTradeProvider({ address, tradingAccount, children }: { addr
     // gas is paid by the wallet that sends the transactions, even when the trades live on a smart account
     queryFn: async () => Number(formatEther(await exchange().client.getNativeBalance(wallet))),
   });
-  const voucher = useQuery({
-    queryKey: ["bump", "chain", "voucher", account],
-    enabled: !!bank,
-    refetchInterval: 30_000,
-    queryFn: async () => {
-      const eligibility = await exchange().client.getPerpVoucherEligibility(bank as Address, account);
-      if (!eligibility.eligible) return eligibility;
-      // The deployed distributor can refuse self-claims (dreamDEX grants vouchers itself, in batches) while the SDK's
-      // read still says "eligible". Dry-run the claim: if it reverts, the player must not be offered a button that fails.
-      try {
-        const client = createPublicClient({ chain: HIDEKI.chain, transport: http() });
-        const distributor = await client.readContract({ address: bank as Address, abi: parseAbi(["function getCreditGranter() view returns (address)"]), functionName: "getCreditGranter" });
-        await client.call({ account, to: distributor, data: encodeFunctionData({ abi: parseAbi(["function claim()"]), functionName: "claim" }) });
-      } catch (error) {
-        // only a revert means "not claimable"; a flaky RPC keeps the SDK's answer
-        if ((error as { name?: string }).name === "CallExecutionError") return { eligible: false as const, reason: "selfClaimDisabled" };
-      }
-      return eligibility;
-    },
-  });
 
   const row = markets?.[draft.marketId];
   const scale = row ?? (markets ? (Object.values(markets)[0] as NonNullable<typeof row>) : undefined);
   const balance = scale && equity.data ? round2(usdOf(equity.data.total, scale)) : 0;
   const available = scale && equity.data ? round2(Math.max(0, usdOf(equity.data.free, scale))) : 0;
-  const grant = voucher.data?.eligible && scale ? usdOf(voucher.data.grantAmount, scale) : 0;
-  const canClaim = !!voucher.data?.eligible;
   const broke = !position && !!equity.data && available < MIN_STAKE;
 
   // the market's own cap, held lower for an account living on a voucher (its cap replaces the market's)
@@ -227,9 +205,7 @@ export function ChainTradeProvider({ address, tradingAccount, children }: { addr
             : gas.data !== undefined && gas.data < GAS_NEEDED_STT
               ? `Needs ${GAS_NEEDED_STT} STT for gas and TP/SL. You have ${gas.data.toFixed(2)}.`
               : broke
-                ? canClaim
-                  ? `Claim your ${usd(grant)} to start trading.`
-                  : "No USDso to trade. Add USDso to your wallet first."
+                ? "No USDso to trade. Add USDso to your account first."
                 : maxLeverage === 0
                   ? `Your voucher can't trade ${draft.marketId.toUpperCase()}.`
                   : draft.leverage > maxLeverage
@@ -237,8 +213,8 @@ export function ChainTradeProvider({ address, tradingAccount, children }: { addr
                     : (check.data?.error ?? null);
 
   const setup = useMemo<ChainSetup>(
-    () => ({ address, account, linked: !!tradingAccount, gas: gas.data ?? 0, gasNeeded: GAS_NEEDED_STT, canClaim, grant, connected: !!markets && gas.isSuccess }),
-    [address, account, tradingAccount, gas.data, gas.isSuccess, canClaim, grant, markets],
+    () => ({ address, account, linked: !!tradingAccount, gas: gas.data ?? 0, gasNeeded: GAS_NEEDED_STT, connected: !!markets && gas.isSuccess }),
+    [address, account, tradingAccount, gas.data, gas.isSuccess, markets],
   );
 
   const patchDraft = useCallback(
@@ -453,23 +429,33 @@ export function ChainTradeProvider({ address, tradingAccount, children }: { addr
     [open, markets, signer, cancelStops, armStops, refresh, step],
   );
 
+  /** Pulls free collateral out of the MarginBank back to the trading account. `amount` is a decimal string of USDso. */
+  const withdraw = useCallback(
+    async (amount: string) => {
+      if (!bank || !scale || busy.current) return;
+      busy.current = true;
+      try {
+        const raw = parseUnits(amount, scale.quoteDecimals);
+        if (raw <= 0n) throw new Error("Enter an amount to withdraw.");
+        const { withdrawable } = await exchange().client.getMarginAccount(bank, account);
+        if (raw > withdrawable) throw new Error(`You can withdraw up to ${usd(round2(usdOf(withdrawable, scale)))} right now.`);
+        const trader = await signer();
+        await trader.withdrawMargin({ marginBank: bank, amount: raw });
+        await refresh();
+      } catch (error) {
+        throw new Error(shortError(error));
+      } finally {
+        busy.current = false;
+      }
+    },
+    [bank, scale, account, signer, refresh],
+  );
+
+  // No faucet here: the balance is the player's own USDso. "Refill" re-reads it, so USDso just sent shows up at once.
   const refill = useCallback(async () => {
-    if (!broke || !canClaim || !bank || busy.current) return;
-    busy.current = true;
-    setPending({ kind: "refill", step: "fill", txHash: null, error: null, warning: null });
-    try {
-      const trader = await signer();
-      const claimed = await trader.claimPerpVoucher({ marginBank: bank });
-      step("refill", { step: "done", txHash: claimed.hash });
-      await refresh();
-    } catch (error) {
-      const message = shortError(error);
-      step("refill", { error: message });
-      throw new Error(message);
-    } finally {
-      busy.current = false;
-    }
-  }, [broke, canClaim, bank, signer, refresh, step]);
+    await refresh();
+    throw new Error(`Send USDso (Hideki testnet) to ${account} to trade.`);
+  }, [refresh, account]);
 
   const previewClose = useCallback(
     async (percent: number): Promise<number | null> => {
@@ -526,16 +512,17 @@ export function ChainTradeProvider({ address, tradingAccount, children }: { addr
       lastClosed,
       pending,
       setup,
-      refillLabel: canClaim ? `Claim ${usd(grant)}` : "Add USDso to trade",
+      refillLabel: "Add USDso to trade",
       patchDraft,
       openPosition,
       refill,
+      withdraw,
       updateLimits,
       closePosition,
       previewClose,
       dismissPending,
     }),
-    [draft, position, history, trades.isPending, balance, available, broke, blocker, maxLeverage, lastClosed, pending, setup, canClaim, grant, patchDraft, openPosition, refill, updateLimits, closePosition, previewClose, dismissPending],
+    [draft, position, history, trades.isPending, balance, available, broke, blocker, maxLeverage, lastClosed, pending, setup, patchDraft, openPosition, refill, withdraw, updateLimits, closePosition, previewClose, dismissPending],
   );
 
   return <TradeContext.Provider value={value}>{children}</TradeContext.Provider>;

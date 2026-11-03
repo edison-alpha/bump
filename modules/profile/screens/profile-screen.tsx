@@ -20,6 +20,7 @@ import { useSession } from "@/modules/session/session-provider";
 import { useTrade } from "@/modules/trade/trade-provider";
 import { DreamdexAccountCard } from "../components/dreamdex-account-card";
 import { MenuRow } from "../components/menu-row";
+import { WalletBalancesCard } from "../components/wallet-balances-card";
 
 /** Long dash used for empty stats, as in the design. */
 const EMPTY = <span className="mx-auto mt-2 block h-1 w-5 rounded-full bg-white" aria-label="none" />;
@@ -73,6 +74,7 @@ export function ProfileScreen() {
         )}
       </Card>
 
+      {mode === "chain" && <WalletBalancesCard />}
       {mode === "chain" && <DreamdexAccountCard />}
 
       <Card className="grid grid-cols-3 py-2 text-center">
