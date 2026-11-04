@@ -71,4 +71,4 @@ export function buyFrom(asks: readonly Level[], quote: number): { out: number; s
 /** A taker fee and the pool's escrow headroom: a buy never spends the last sliver of the balance. */
 export const HEADROOM = 0.995;
 
-export const TOKEN_LOGO: Record<string, string> = { STT: "/tokens/somnia.png", USDso: "/tokens/usdso.png" };
+export const TOKEN_LOGO: Record<string, string> = { STT: "/tokens/somnia.png", SOMI: "/tokens/somnia.png", USDso: "/tokens/usdso.png" };

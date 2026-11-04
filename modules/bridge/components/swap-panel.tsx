@@ -8,8 +8,8 @@ import { useConsole } from "@/components/console/console-provider";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { shortError } from "@/lib/bump/dreamdex";
-import { GAS_ENVELOPE_STT, SIDES, switchTo } from "@/lib/chain/bridge";
-import { exchange } from "@/lib/chain/exchange";
+import { GAS_ENVELOPE_STT, SIDES, switchTo, type BridgeSide } from "@/lib/chain/bridge";
+import { exchangeOn } from "@/lib/chain/exchange";
 import { buyFrom, floorDp, HEADROOM, pairOf, sellInto, TOKEN_LOGO, type Level, type SpotPair } from "@/lib/chain/swap";
 import { useTrade } from "@/modules/trade/trade-provider";
 
@@ -52,6 +52,7 @@ export function SwapPanel() {
   const { flash } = useConsole();
   const queryClient = useQueryClient();
   const [value, setValue] = useState("");
+  const [chain, setChain] = useState<BridgeSide>("hideki");
   const [symbol, setSymbol] = useState<string | null>(null);
   const [side, setSide] = useState<"sell" | "buy">("sell");
 
@@ -59,28 +60,28 @@ export function SwapPanel() {
 
   // every spot pair on Hideki, read off the chain's own market list
   const pairs = useQuery({
-    queryKey: ["bump", "swap", "pairs"],
+    queryKey: ["bump", "swap", "pairs", chain],
     staleTime: 5 * 60_000,
     queryFn: async (): Promise<SpotPair[]> => {
-      const ex = exchange();
+      const ex = exchangeOn(chain);
       await ex.loadMarkets();
       return Object.values(ex.markets)
         .filter((m) => m.type === "spot")
         .map(pairOf);
     },
   });
-  const pair = pairs.data?.find((p) => p.symbol === symbol) ?? pairs.data?.find((p) => p.symbol === "STT/USDso") ?? pairs.data?.[0];
+  const pair = pairs.data?.find((p) => p.symbol === symbol) ?? pairs.data?.find((p) => p.quote === "USDso" && p.baseIsNative) ?? pairs.data?.[0];
   const fromSymbol = pair ? (side === "sell" ? pair.base : pair.quote) : "";
   const toSymbol = pair ? (side === "sell" ? pair.quote : pair.base) : "";
   const fromDecimals = pair ? (side === "sell" ? pair.baseDecimals : pair.quoteDecimals) : 18;
   const fromNative = !!pair && side === "sell" && pair.baseIsNative;
 
   const held = useQuery({
-    queryKey: ["bump", "swap", "balance", wallet, pair?.symbol, side],
+    queryKey: ["bump", "swap", "balance", chain, wallet, pair?.symbol, side],
     enabled: !!wallet && !!pair,
     refetchInterval: 10_000,
     queryFn: async () => {
-      const { client } = exchange();
+      const { client } = exchangeOn(chain);
       const gas = await client.getNativeBalance(wallet as Address);
       const raw = fromNative ? gas : ((await client.getBalances([{ token: (side === "sell" ? pair?.baseToken : pair?.quoteToken) as Address }], wallet as Address))[0] ?? 0n);
       return { raw: raw.toString(), gas: gas.toString() };
@@ -92,11 +93,11 @@ export function SwapPanel() {
   const spendable = fromNative ? Math.max(0, balance - GAS_ENVELOPE_STT) : side === "buy" ? balance * HEADROOM : balance;
 
   const book = useQuery({
-    queryKey: ["bump", "swap", "book", pair?.symbol],
+    queryKey: ["bump", "swap", "book", chain, pair?.symbol],
     enabled: !!pair,
     refetchInterval: 5_000,
     queryFn: async () => {
-      const b = await exchange().fetchOrderBook(pair?.symbol as string, 25);
+      const b = await exchangeOn(chain).fetchOrderBook(pair?.symbol as string, 25);
       return { bids: b.bids as readonly Level[], asks: b.asks as readonly Level[] };
     },
   });
@@ -130,12 +131,12 @@ export function SwapPanel() {
       if (!wallet || !pair) throw new Error("Your wallet isn't ready yet.");
       if (baseAmount <= 0 || baseAmount < pair.minAmount) throw new Error(`The smallest swap here is ${pair.minAmount} ${pair.base}.`);
       if (!enough) throw new Error("The order book is too thin for that size right now. Try a smaller amount.");
-      if (gasBalance < GAS_ENVELOPE_STT) throw new Error(`Your wallet needs at least ${GAS_ENVELOPE_STT} STT on Hideki to send this. Top it up and try again.`);
+      if (gasBalance < GAS_ENVELOPE_STT) throw new Error(`Your wallet needs at least ${GAS_ENVELOPE_STT} STT on ${SIDES[chain].name} to send this. Top it up and try again.`);
       const privy = wallets.find((w) => w.address.toLowerCase() === wallet.toLowerCase());
       if (!privy) throw new Error("Your wallet isn't ready yet. Try again in a moment.");
-      const provider = await switchTo(privy, SIDES.hideki.chainId, SIDES.hideki.name);
-      const walletClient = createWalletClient({ account: wallet, chain: SIDES.hideki.chain, transport: custom(provider) });
-      const ex = exchange();
+      const provider = await switchTo(privy, SIDES[chain].chainId, SIDES[chain].name);
+      const walletClient = createWalletClient({ account: wallet, chain: SIDES[chain].chain, transport: custom(provider) });
+      const ex = exchangeOn(chain);
       ex.setSigner({ walletClient });
       return ex.createOrder(pair.symbol, "market", side, baseAmount);
     },
@@ -170,6 +171,13 @@ export function SwapPanel() {
           : !enough
             ? "Not enough liquidity"
             : "Swap";
+  const pickChain = (next: BridgeSide) => {
+    if (swap.isPending || next === chain) return;
+    setChain(next);
+    setSymbol(null);
+    setSide("sell");
+    setValue("");
+  };
   const pickPair = (next: string) => {
     if (swap.isPending) return;
     setSymbol(next);
@@ -189,6 +197,20 @@ export function SwapPanel() {
         swap.mutate();
       }}
     >
+      <div className="flex gap-2" role="group" aria-label="Network">
+        {(["somnia", "hideki"] as const).map((c) => (
+          <button
+            key={c}
+            type="button"
+            aria-pressed={chain === c}
+            disabled={swap.isPending}
+            onClick={() => pickChain(c)}
+            className={`flex-1 rounded-full px-3 py-1 text-[13px] font-semibold ${chain === c ? "bg-white/20" : "bg-white/5 text-white/60"}`}
+          >
+            {SIDES[c].name}
+          </button>
+        ))}
+      </div>
       <div className="flex flex-wrap gap-2" role="group" aria-label="Pair">
         {pairs.data?.map((p) => (
           <button
@@ -260,11 +282,11 @@ export function SwapPanel() {
         </p>
         <p className="flex justify-between">
           <span>Network gas</span>
-          <span>STT on {SIDES.hideki.name}</span>
+          <span>STT on {SIDES[chain].name}</span>
         </p>
       </Card>
 
-      {setup.linked && <p className="text-[12px] leading-snug text-white/60">You trade through a dreamDEX account: swapped USDso lands in your wallet. Move it to the account from Profile.</p>}
+      {setup.linked && chain === "hideki" && <p className="text-[12px] leading-snug text-white/60">You trade through a dreamDEX account: swapped USDso lands in your wallet. Move it to the account from Profile.</p>}
       <Button type="submit" disabled={swap.isPending || input <= 0 || tooMuch || !enough || baseAmount < pair.minAmount}>
         {label}
       </Button>
