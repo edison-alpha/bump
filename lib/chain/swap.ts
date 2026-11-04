@@ -72,3 +72,16 @@ export function buyFrom(asks: readonly Level[], quote: number): { out: number; s
 export const HEADROOM = 0.995;
 
 export const TOKEN_LOGO: Record<string, string> = { STT: "/tokens/somnia.png", SOMI: "/tokens/somnia.png", USDso: "/tokens/usdso.png" };
+
+/** A token a wallet can hold on one chain: the native coin (no address) or an ERC-20. */
+export type Token = { symbol: string; address: Address | null; decimals: number };
+
+/** The native coin first, then every ERC-20 the chain's spot books list (base and quote), deduplicated. */
+export function tokensOf(pairs: readonly SpotPair[], native: Token = { symbol: "STT", address: null, decimals: 18 }): Token[] {
+  const found = new Map<string, Token>();
+  for (const p of pairs) {
+    if (!p.baseIsNative) found.set(p.baseToken.toLowerCase(), { symbol: p.base, address: p.baseToken, decimals: p.baseDecimals });
+    found.set(p.quoteToken.toLowerCase(), { symbol: p.quote, address: p.quoteToken, decimals: p.quoteDecimals });
+  }
+  return [native, ...found.values()];
+}

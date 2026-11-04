@@ -11,14 +11,15 @@ import { Screen } from "@/components/shell/screen";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { shortError } from "@/lib/bump/dreamdex";
-import { ASSETS, bridgeClient, GAS_ENVELOPE_STT, hookAnswers, isDelivered, messageIdOf, otherSide, routeOf, SIDES, stepWouldSucceed, switchTo, type BridgeAsset, type BridgeSide } from "@/lib/chain/bridge";
+import { ASSETS, bridgeClient, GAS_ENVELOPE_STT, hookAnswers, isDelivered, messageIdOf, otherSide, routeOf, SIDES, stepWouldSucceed, switchTo, TX_GAS, type BridgeAsset, type BridgeSide } from "@/lib/chain/bridge";
 import { exchange } from "@/lib/chain/exchange";
 import { BridgeProgress, type BridgeRun } from "../components/bridge-progress";
+import { SendPanel } from "../components/send-panel";
 import { SwapPanel } from "../components/swap-panel";
+import { WithdrawPanel } from "../components/withdraw-panel";
 import { useTrade } from "@/modules/trade/trade-provider";
 
-/** The SDK's fixed gas ceiling; the wallet needs gas × max fee (0.6 STT) on hand, though unused gas is never charged. */
-const BRIDGE_GAS = 10_000_000n;
+const BRIDGE_GAS = TX_GAS;
 
 const short = (address: string) => `${address.slice(0, 6)}…${address.slice(-4)}`;
 const amountOf = (value: string, max = 4) => Number(value).toLocaleString("en-US", { maximumFractionDigits: max });
@@ -77,7 +78,7 @@ export function BridgeScreen() {
   const [value, setValue] = useState("");
   const [asset, setAsset] = useState<BridgeAsset>("USDso");
   const [from, setFrom] = useState<BridgeSide>("somnia");
-  const [tab, setTab] = useState<"bridge" | "swap">("bridge");
+  const [tab, setTab] = useState<"bridge" | "swap" | "send" | "withdraw">("bridge");
   const to = otherSide(from);
 
   const wallet = setup?.address as Address | undefined;
@@ -301,21 +302,23 @@ export function BridgeScreen() {
 
   return (
     <Screen title="Bridge">
-      <div className="flex gap-2" role="tablist" aria-label="Bridge or swap">
-        {(["bridge", "swap"] as const).map((t) => (
+      <div className="flex gap-2" role="tablist" aria-label="Bridge, swap, send or withdraw">
+        {(["bridge", "swap", "send", "withdraw"] as const).map((t) => (
           <button
             key={t}
             type="button"
             role="tab"
             aria-selected={tab === t}
             onClick={() => setTab(t)}
-            className={`flex-1 rounded-full px-3 py-1.5 text-[14px] font-semibold capitalize ${tab === t ? "bg-white/20" : "bg-white/5 text-white/60"}`}
+            className={`flex-1 rounded-full px-1 py-1.5 text-[13px] font-semibold capitalize ${tab === t ? "bg-white/20" : "bg-white/5 text-white/60"}`}
           >
             {t}
           </button>
         ))}
       </div>
       {tab === "swap" && <SwapPanel />}
+      {tab === "send" && <SendPanel />}
+      {tab === "withdraw" && <WithdrawPanel />}
       {tab === "bridge" && run && <BridgeProgress run={run} now={now} explorerTx={run.bridgeHash && explorer ? `${explorer}/tx/${run.bridgeHash}` : undefined} onDismiss={() => update(null)} />}
       {tab === "bridge" && (
       <form

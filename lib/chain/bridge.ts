@@ -28,6 +28,9 @@ export const ASSETS: Record<BridgeAsset, { token: (typeof BridgeToken)[keyof typ
   STT: { token: BridgeToken.STT, logo: "/tokens/somnia.png" },
 };
 
+/** The fixed gas ceiling every write here uses, like the SDK's own: wallets mis-estimate on Somnia, and unused gas is never charged. */
+export const TX_GAS = 10_000_000n;
+
 /** Somnia's mempool admits a transaction only when the balance covers gas × max fee (0.6 STT) on top of its value. */
 export const GAS_ENVELOPE_STT = 0.6;
 

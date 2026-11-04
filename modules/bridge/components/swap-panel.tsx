@@ -10,8 +10,9 @@ import { Card } from "@/components/ui/card";
 import { shortError } from "@/lib/bump/dreamdex";
 import { GAS_ENVELOPE_STT, SIDES, switchTo, type BridgeSide } from "@/lib/chain/bridge";
 import { exchangeOn } from "@/lib/chain/exchange";
-import { buyFrom, floorDp, HEADROOM, pairOf, sellInto, TOKEN_LOGO, type Level, type SpotPair } from "@/lib/chain/swap";
+import { buyFrom, floorDp, HEADROOM, sellInto, TOKEN_LOGO, type Level } from "@/lib/chain/swap";
 import { useTrade } from "@/modules/trade/trade-provider";
+import { useSpotPairs } from "../use-spot-pairs";
 
 const amountOf = (value: number, max = 4) => value.toLocaleString("en-US", { maximumFractionDigits: max });
 
@@ -58,18 +59,8 @@ export function SwapPanel() {
 
   const wallet = setup?.address as Address | undefined;
 
-  // every spot pair on Hideki, read off the chain's own market list
-  const pairs = useQuery({
-    queryKey: ["bump", "swap", "pairs", chain],
-    staleTime: 5 * 60_000,
-    queryFn: async (): Promise<SpotPair[]> => {
-      const ex = exchangeOn(chain);
-      await ex.loadMarkets();
-      return Object.values(ex.markets)
-        .filter((m) => m.type === "spot")
-        .map(pairOf);
-    },
-  });
+  // every spot pair on the chosen chain, read off the chain's own market list
+  const pairs = useSpotPairs(chain);
   const pair = pairs.data?.find((p) => p.symbol === symbol) ?? pairs.data?.find((p) => p.quote === "USDso" && p.baseIsNative) ?? pairs.data?.[0];
   const fromSymbol = pair ? (side === "sell" ? pair.base : pair.quote) : "";
   const toSymbol = pair ? (side === "sell" ? pair.quote : pair.base) : "";
