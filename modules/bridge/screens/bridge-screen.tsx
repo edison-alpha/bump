@@ -134,7 +134,9 @@ export function BridgeScreen() {
     queryFn: () => routeIsUp(from, origin?.router as Address),
   });
   const routeDown = route.data === false;
-  const routeDownText = `The ${asset} bridge route is down on ${SIDES[from].short}'s side right now (its gas hook reverts). Nothing was sent, and your ${asset} is safe.`;
+  const routeDownText =
+    `The ${asset} route from ${SIDES[from].short} is down on Somnia's side right now (its gas hook reverts). Nothing was sent, and your ${asset} is safe.` +
+    (asset === "USDso" && from === "somnia" ? " STT still bridges, and USDso from Hideki to Somnia still works. To trade, claim the free USDso voucher from Home." : "");
 
   // the bridge in flight, kept in localStorage once it is sent so a reload keeps watching for the delivery
   const storeKey = `bump:bridge:${wallet}`;
