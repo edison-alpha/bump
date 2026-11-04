@@ -415,12 +415,37 @@ export function ChainTradeProvider({ address, tradingAccount, children }: { addr
     [open, markets, signer, account, markOf, cancelStops, address, queryClient, refresh, step],
   );
 
-  /** Closes a whole on-chain position by pool, one bump did not open included. A tracked trade closes through its own flow. */
+  /** Cancels the pending stops on one pool (refunding their STT), by the chain's own list rather than this device's memory. */
+  const cancelPoolStops = useCallback(
+    async (trader: Awaited<ReturnType<typeof signer>>, r: NonNullable<typeof row>) => {
+      if (!r.stopRegistry) return;
+      let ids: bigint[];
+      try {
+        ids = (await exchange().client.listPerpStopOrders({ account, pool: r.poolAddress, status: ["PENDING"] })).map((s) => BigInt(s.orderIdRaw));
+      } catch {
+        return;
+      }
+      if (ids.length === 0) return;
+      try {
+        await trader.cancelPerpStopOrders({ registry: r.stopRegistry as Address, orderIds: ids });
+      } catch {
+        // already triggered or cancelled
+      }
+    },
+    [account],
+  );
+
+  const onChainMarket = useCallback((pool: string) => (markets ? Object.values(markets).find((m) => m.poolAddress.toLowerCase() === pool.toLowerCase()) : undefined), [markets]);
+  const isTracked = useCallback((r: NonNullable<typeof row>) => !!open && markets?.[open.marketId]?.poolAddress.toLowerCase() === r.poolAddress.toLowerCase(), [open, markets]);
+  const failure = (error: unknown) =>
+    new Error(error instanceof Error && !(error as { errorName?: string }).errorName && error.message.length < 90 ? error.message : shortError(error));
+
+  /** Closes `percent` of an on-chain position by pool, one bump did not open included. A tracked trade closes through its own flow. */
   const closeOnChain = useCallback(
-    async (pool: string) => {
-      const r = markets ? Object.values(markets).find((m) => m.poolAddress.toLowerCase() === pool.toLowerCase()) : undefined;
+    async (pool: string, percent = 100) => {
+      const r = onChainMarket(pool);
       if (!r) throw new Error("bump can't close that market yet.");
-      if (open && markets?.[open.marketId]?.poolAddress.toLowerCase() === pool.toLowerCase()) throw new Error("Close this trade from its own screen.");
+      if (isTracked(r)) throw new Error("Close this trade from its own screen.");
       if (busy.current) throw new Error("Another action is still running. Try again in a moment.");
       busy.current = true;
       try {
@@ -430,18 +455,47 @@ export function ChainTradeProvider({ address, tradingAccount, children }: { addr
           void refresh();
           return;
         }
-        const order = closeToOrder({ side: onChain.size > 0n ? "long" : "short", sizeRaw: onChain.size }, 100, r, await markOf(r));
+        const order = closeToOrder({ side: onChain.size > 0n ? "long" : "short", sizeRaw: onChain.size }, percent, r, await markOf(r));
         const placed = await trader.placePerpOrder(order);
         if (placed.fills.length === 0) throw new Error("No fill at this price. Nothing was closed, try again.");
-        await cancelStops(trader, r);
+        // the stops are sized to the whole position, so they only go when all of it is gone
+        if (percent >= 100) await cancelPoolStops(trader, r);
         await refresh();
       } catch (error) {
-        throw new Error(error instanceof Error && !(error as { errorName?: string }).errorName && error.message.length < 90 ? error.message : shortError(error));
+        throw failure(error);
       } finally {
         busy.current = false;
       }
     },
-    [markets, open, signer, account, markOf, cancelStops, refresh],
+    [onChainMarket, isTracked, signer, account, markOf, cancelPoolStops, refresh],
+  );
+
+  /**
+   * Replaces the TP/SL on an on-chain position. Measured from the current price, not the entry: a position that is
+   * already underwater would otherwise get a stop on the wrong side of the market, which fires at once.
+   */
+  const setLimitsOnChain = useCallback(
+    async (pool: string, targetPct: number, stopPct: number) => {
+      const r = onChainMarket(pool);
+      if (!r) throw new Error("bump can't set limits on that market yet.");
+      if (isTracked(r)) throw new Error("Edit this trade's limits from its own screen.");
+      if (busy.current) throw new Error("Another action is still running. Try again in a moment.");
+      busy.current = true;
+      try {
+        const trader = await signer();
+        const onChain = await exchange().client.getPerpPosition({ marginBank: r.marginBank as Address, account, pool: r.poolAddress });
+        if (onChain.size === 0n) throw new Error("That position is already closed.");
+        const side = onChain.size > 0n ? "long" : "short";
+        await cancelPoolStops(trader, r);
+        await trader.placePerpStopOrder(limitsToStops(side, await markOf(r), targetPct, stopPct, r));
+        await refresh();
+      } catch (error) {
+        throw failure(error);
+      } finally {
+        busy.current = false;
+      }
+    },
+    [onChainMarket, isTracked, signer, account, markOf, cancelPoolStops, refresh],
   );
 
   const updateLimits = useCallback(
@@ -623,12 +677,13 @@ export function ChainTradeProvider({ address, tradingAccount, children }: { addr
       withdraw,
       moveToAccount: tradingAccount ? moveToAccount : null,
       closeOnChain,
+      setLimitsOnChain,
       updateLimits,
       closePosition,
       previewClose,
       dismissPending,
     }),
-    [draft, position, history, trades.isPending, balance, available, broke, blocker, maxLeverage, lastClosed, pending, setup, patchDraft, openPosition, refill, withdraw, moveToAccount, tradingAccount, closeOnChain, updateLimits, closePosition, previewClose, dismissPending],
+    [draft, position, history, trades.isPending, balance, available, broke, blocker, maxLeverage, lastClosed, pending, setup, patchDraft, openPosition, refill, withdraw, moveToAccount, tradingAccount, closeOnChain, setLimitsOnChain, updateLimits, closePosition, previewClose, dismissPending],
   );
 
   return <TradeContext.Provider value={value}>{children}</TradeContext.Provider>;

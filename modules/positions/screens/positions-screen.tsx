@@ -3,9 +3,7 @@
 import { isPerpMarket } from "@somnia-chain/markets-sdk";
 import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
-import { useState } from "react";
 import { formatUnits, type Address } from "viem";
-import { useConsole } from "@/components/console/console-provider";
 import { Screen } from "@/components/shell/screen";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -43,12 +41,8 @@ const qty = (value: number) => value.toLocaleString("en-US", { maximumFractionDi
  * linked dreamDEX smart account when there is one, the wallet otherwise.
  */
 export function PositionsScreen() {
-  const { setup, position, mode, closeOnChain } = useTrade();
-  const { flash } = useConsole();
+  const { setup, position, mode } = useTrade();
   const account = setup?.account as Address | undefined;
-  /** The pool whose close button was tapped once: a second tap closes it. */
-  const [confirm, setConfirm] = useState<string | null>(null);
-  const [closing, setClosing] = useState<string | null>(null);
 
   const positions = useQuery({
     queryKey: ["bump", "chain", "positions", account],
@@ -107,27 +101,8 @@ export function PositionsScreen() {
   const rows = positions.data?.rows ?? [];
   const margin = positions.data?.margin ?? null;
   const underwater = !!margin && (margin.status !== "Healthy" || margin.required > margin.equity);
-  const close = async (pool: string, symbol: string) => {
-    if (!closeOnChain) return;
-    if (confirm !== pool) {
-      setConfirm(pool);
-      return;
-    }
-    setConfirm(null);
-    setClosing(pool);
-    try {
-      await closeOnChain(pool);
-      flash(`${symbol} closed.`, "good");
-      await positions.refetch();
-    } catch (error) {
-      flash(error instanceof Error ? error.message : "Couldn't close it. Try again.", "warn");
-    } finally {
-      setClosing(null);
-    }
-  };
   const totalPnl = rows.reduce((sum, r) => sum + (r.pnl ?? 0), 0);
   const priced = rows.every((r) => r.pnl !== null);
-
   return (
     <Screen title="Positions">
       {positions.isPending && <Card className="px-3 py-3 text-[14px]">Reading your positions…</Card>}
@@ -185,7 +160,7 @@ export function PositionsScreen() {
                 <p className={`font-display text-[16px] leading-tight font-bold tabular-nums ${(r.pnl ?? 0) >= 0 ? "text-mint" : "text-coral"}`}>{r.pnl === null ? "–" : signedUsd(r.pnl)}</p>
                 <p className="text-[12px] text-white/75 tabular-nums">{r.move === null ? "no price" : signedPct(r.move, 2)}</p>
               </div>
-              {tracked && <Icon name="chevron" size={20} className="text-white" />}
+              <Icon name="chevron" size={20} className="shrink-0 text-white" />
             </div>
             <div className="flex items-center justify-between text-[12px] text-white/75">
               <span>
@@ -195,23 +170,14 @@ export function PositionsScreen() {
             </div>
           </Card>
         );
-        return tracked ? (
-          <Link key={r.symbol} href="/position" aria-label={`Open your ${r.symbol} trade`}>
+        return (
+          <Link key={r.symbol} href={tracked ? "/position" : `/positions/${r.pool}`} aria-label={`Open your ${r.symbol} position`}>
             {body}
           </Link>
-        ) : (
-          <div key={r.symbol} className="flex flex-col gap-1">
-            {body}
-            {closeOnChain && (
-              <Button size="sm" variant={confirm === r.pool ? "primary" : "outline"} disabled={closing !== null} onClick={() => void close(r.pool, r.symbol)}>
-                {closing === r.pool ? "Closing…" : confirm === r.pool ? `Tap again to close all of ${r.symbol}` : "Close position"}
-              </Button>
-            )}
-          </div>
         );
       })}
 
-      {rows.some((r) => r.stops === 0) && <p className="text-[12px] leading-snug text-white/60">A position with no TP/SL isn&apos;t protected. Open it and use Edit limits to set one.</p>}
+      {rows.some((r) => r.stops === 0) && <p className="text-[12px] leading-snug text-white/60">Tap a position for its details, to set a TP/SL or to close it.</p>}
     </Screen>
   );
 }
