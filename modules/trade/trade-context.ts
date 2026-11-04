@@ -75,6 +75,8 @@ export type TradeContextValue = {
   withdraw: ((amount: string) => Promise<void>) | null;
   /** Chain, linked account only: sends USDso from the sign-in wallet to the dreamDEX smart account (decimal string). Null otherwise. */
   moveToAccount: ((amount: string) => Promise<void>) | null;
+  /** Chain: closes a whole on-chain position by its pool address, including one bump did not open. Null in practice mode. */
+  closeOnChain: ((pool: string) => Promise<void>) | null;
   updateLimits: (limits: Pick<Position, "targetPct" | "stopPct">) => Promise<boolean>;
   /** Closes `percent` (1-100) of the open position at about `exit`, resolves the receipt. */
   closePosition: (percent: number, exit: number, reason?: CloseReason) => Promise<ClosedTrade | null>;

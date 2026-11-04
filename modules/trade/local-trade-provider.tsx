@@ -129,6 +129,7 @@ export function LocalTradeProvider({ children }: { children: ReactNode }) {
       refill,
       withdraw: null,
       moveToAccount: null,
+      closeOnChain: null,
       updateLimits,
       closePosition,
       previewClose,

@@ -128,12 +128,16 @@ export function ChainTradeProvider({ address, tradingAccount, children }: { addr
       const held = await heldCollateral();
       try {
         const e = await client.getAccountEquity(account, { scope: "perps", marginBank: bank as Address });
-        return { total: e.totalEquity + held, free: e.equity + held };
+        // cross margin: what open positions require is not free, so free margin is equity minus the initial margin in use
+        const m = await client.getMarginAccount(bank as Address, account).catch(() => null);
+        const inUse = m && m.imReq > 0n ? m.imReq : 0n;
+        const freeBank = e.equity > inUse ? e.equity - inUse : 0n;
+        return { total: e.totalEquity + held, free: freeBank + held, pools: m ? m.activePerpPools.length : 0 };
       } catch {
         // one stale mark makes the full read throw; the bank's own answer still says what the account holds
         const total = await client.tryGetPerpAccountEquity(bank as Address, account);
         if (total === null) throw new Error("equity unavailable");
-        return { total: total + held, free: total + held };
+        return { total: total + held, free: total + held, pools: 0 };
       }
     },
   });
@@ -148,7 +152,8 @@ export function ChainTradeProvider({ address, tradingAccount, children }: { addr
   const scale = row ?? (markets ? (Object.values(markets)[0] as NonNullable<typeof row>) : undefined);
   const balance = scale && equity.data ? round2(usdOf(equity.data.total, scale)) : 0;
   const available = scale && equity.data ? round2(Math.max(0, usdOf(equity.data.free, scale))) : 0;
-  const broke = !position && !!equity.data && available < MIN_STAKE;
+  // margin held by an open position is not "out of coins": the blocker says to close it instead
+  const broke = !position && !!equity.data && available < MIN_STAKE && (equity.data.pools ?? 0) === 0;
 
   // the market's own cap, held lower for an account living on a voucher (its cap replaces the market's)
   const leverage = useQuery({
@@ -194,7 +199,9 @@ export function ChainTradeProvider({ address, tradingAccount, children }: { addr
 
   const blocker = position
     ? "Close your trade first."
-    : trades.isError && !trades.data
+    : (equity.data?.pools ?? 0) > 0 && available < MIN_STAKE
+      ? "An open position or order already uses your margin. Close it in Positions first."
+      : trades.isError && !trades.data
       ? "Can't reach bump right now. Try again in a moment."
       : !markets
         ? "Loading dreamDEX markets…"
@@ -408,6 +415,35 @@ export function ChainTradeProvider({ address, tradingAccount, children }: { addr
     [open, markets, signer, account, markOf, cancelStops, address, queryClient, refresh, step],
   );
 
+  /** Closes a whole on-chain position by pool, one bump did not open included. A tracked trade closes through its own flow. */
+  const closeOnChain = useCallback(
+    async (pool: string) => {
+      const r = markets ? Object.values(markets).find((m) => m.poolAddress.toLowerCase() === pool.toLowerCase()) : undefined;
+      if (!r) throw new Error("bump can't close that market yet.");
+      if (open && markets?.[open.marketId]?.poolAddress.toLowerCase() === pool.toLowerCase()) throw new Error("Close this trade from its own screen.");
+      if (busy.current) throw new Error("Another action is still running. Try again in a moment.");
+      busy.current = true;
+      try {
+        const trader = await signer();
+        const onChain = await exchange().client.getPerpPosition({ marginBank: r.marginBank as Address, account, pool: r.poolAddress });
+        if (onChain.size === 0n) {
+          void refresh();
+          return;
+        }
+        const order = closeToOrder({ side: onChain.size > 0n ? "long" : "short", sizeRaw: onChain.size }, 100, r, await markOf(r));
+        const placed = await trader.placePerpOrder(order);
+        if (placed.fills.length === 0) throw new Error("No fill at this price. Nothing was closed, try again.");
+        await cancelStops(trader, r);
+        await refresh();
+      } catch (error) {
+        throw new Error(error instanceof Error && !(error as { errorName?: string }).errorName && error.message.length < 90 ? error.message : shortError(error));
+      } finally {
+        busy.current = false;
+      }
+    },
+    [markets, open, signer, account, markOf, cancelStops, refresh],
+  );
+
   const updateLimits = useCallback(
     async (limits: Pick<Position, "targetPct" | "stopPct">) => {
       const t = open;
@@ -586,12 +622,13 @@ export function ChainTradeProvider({ address, tradingAccount, children }: { addr
       refill,
       withdraw,
       moveToAccount: tradingAccount ? moveToAccount : null,
+      closeOnChain,
       updateLimits,
       closePosition,
       previewClose,
       dismissPending,
     }),
-    [draft, position, history, trades.isPending, balance, available, broke, blocker, maxLeverage, lastClosed, pending, setup, patchDraft, openPosition, refill, withdraw, moveToAccount, tradingAccount, updateLimits, closePosition, previewClose, dismissPending],
+    [draft, position, history, trades.isPending, balance, available, broke, blocker, maxLeverage, lastClosed, pending, setup, patchDraft, openPosition, refill, withdraw, moveToAccount, tradingAccount, closeOnChain, updateLimits, closePosition, previewClose, dismissPending],
   );
 
   return <TradeContext.Provider value={value}>{children}</TradeContext.Provider>;

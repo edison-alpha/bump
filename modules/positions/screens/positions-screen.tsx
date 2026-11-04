@@ -3,7 +3,9 @@
 import { isPerpMarket } from "@somnia-chain/markets-sdk";
 import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
+import { useState } from "react";
 import { formatUnits, type Address } from "viem";
+import { useConsole } from "@/components/console/console-provider";
 import { Screen } from "@/components/shell/screen";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -16,6 +18,7 @@ import { useTrade } from "@/modules/trade/trade-provider";
 
 type Row = {
   symbol: string;
+  pool: string;
   marketId: string | null;
   side: "long" | "short";
   size: number;
@@ -29,6 +32,9 @@ type Row = {
   stops: number;
 };
 
+/** The margin account as a whole: cross margin means every open position draws on the same equity. */
+type Margin = { equity: number; required: number; status: string };
+
 const qty = (value: number) => value.toLocaleString("en-US", { maximumFractionDigits: value >= 100 ? 2 : 4 });
 
 /**
@@ -37,14 +43,18 @@ const qty = (value: number) => value.toLocaleString("en-US", { maximumFractionDi
  * linked dreamDEX smart account when there is one, the wallet otherwise.
  */
 export function PositionsScreen() {
-  const { setup, position, mode } = useTrade();
+  const { setup, position, mode, closeOnChain } = useTrade();
+  const { flash } = useConsole();
   const account = setup?.account as Address | undefined;
+  /** The pool whose close button was tapped once: a second tap closes it. */
+  const [confirm, setConfirm] = useState<string | null>(null);
+  const [closing, setClosing] = useState<string | null>(null);
 
   const positions = useQuery({
     queryKey: ["bump", "chain", "positions", account],
     enabled: !!account,
     refetchInterval: 15_000,
-    queryFn: async (): Promise<Row[]> => {
+    queryFn: async (): Promise<{ rows: Row[]; margin: Margin | null }> => {
       const { client } = exchange();
       const markets = (await client.listMarkets({ marketType: "PERP", limit: 200 })).filter(isPerpMarket);
       const rows = await Promise.all(
@@ -61,6 +71,7 @@ export function PositionsScreen() {
             const dir = long ? 1 : -1;
             return {
               symbol: m.baseSymbol ?? "?",
+              pool: m.poolAddress,
               marketId: marketIdOf(m),
               side: long ? "long" : "short",
               size,
@@ -76,7 +87,12 @@ export function PositionsScreen() {
           }
         }),
       );
-      return rows.filter((r): r is Row => r !== null).sort((a, b) => b.notional - a.notional);
+      const found = rows.filter((r): r is Row => r !== null).sort((a, b) => b.notional - a.notional);
+      const bank = markets[0]?.marginBank as Address | undefined;
+      const acct = found.length > 0 && bank ? await client.getMarginAccount(bank, account as Address).catch(() => null) : null;
+      const decimals = markets[0]?.quoteDecimals ?? 18;
+      const margin = acct ? { equity: Number(formatUnits(acct.equity, decimals)), required: Number(formatUnits(acct.imReq, decimals)), status: String(acct.marginStatus) } : null;
+      return { rows: found, margin };
     },
   });
 
@@ -88,7 +104,27 @@ export function PositionsScreen() {
     );
   }
 
-  const rows = positions.data ?? [];
+  const rows = positions.data?.rows ?? [];
+  const margin = positions.data?.margin ?? null;
+  const underwater = !!margin && (margin.status !== "Healthy" || margin.required > margin.equity);
+  const close = async (pool: string, symbol: string) => {
+    if (!closeOnChain) return;
+    if (confirm !== pool) {
+      setConfirm(pool);
+      return;
+    }
+    setConfirm(null);
+    setClosing(pool);
+    try {
+      await closeOnChain(pool);
+      flash(`${symbol} closed.`, "good");
+      await positions.refetch();
+    } catch (error) {
+      flash(error instanceof Error ? error.message : "Couldn't close it. Try again.", "warn");
+    } finally {
+      setClosing(null);
+    }
+  };
   const totalPnl = rows.reduce((sum, r) => sum + (r.pnl ?? 0), 0);
   const priced = rows.every((r) => r.pnl !== null);
 
@@ -113,6 +149,20 @@ export function PositionsScreen() {
             {rows.length} open · unrealized{priced ? "" : " (some unpriced)"}
           </span>
           <span className={`font-display text-[18px] font-bold tabular-nums ${totalPnl >= 0 ? "text-mint" : "text-coral"}`}>{signedUsd(totalPnl)}</span>
+        </Card>
+      )}
+
+      {margin && (
+        <Card className="flex flex-col gap-0.5 px-3 py-2 text-[12px]">
+          <p className="flex justify-between text-white/80">
+            <span>Margin (shared by all positions)</span>
+            <span className={underwater ? "font-semibold text-coral" : "text-mint"}>{underwater ? "Needs attention" : "Healthy"}</span>
+          </p>
+          <p className="flex justify-between tabular-nums text-white/75">
+            <span>Equity {usd(margin.equity)}</span>
+            <span>Required {usd(margin.required)}</span>
+          </p>
+          {underwater && <p className="leading-snug text-coral">Your open positions use more margin than your equity, so no new trade can open. Close one below to free it.</p>}
         </Card>
       )}
 
@@ -150,7 +200,14 @@ export function PositionsScreen() {
             {body}
           </Link>
         ) : (
-          <div key={r.symbol}>{body}</div>
+          <div key={r.symbol} className="flex flex-col gap-1">
+            {body}
+            {closeOnChain && (
+              <Button size="sm" variant={confirm === r.pool ? "primary" : "outline"} disabled={closing !== null} onClick={() => void close(r.pool, r.symbol)}>
+                {closing === r.pool ? "Closing…" : confirm === r.pool ? `Tap again to close all of ${r.symbol}` : "Close position"}
+              </Button>
+            )}
+          </div>
         );
       })}
 
