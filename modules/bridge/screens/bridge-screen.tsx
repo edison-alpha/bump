@@ -63,8 +63,10 @@ function ChainSwitch({ value, onChange }: { value: BridgeSide; onChange: (side: 
           type="button"
           aria-pressed={value === c}
           onClick={() => onChange(c)}
-          className={`rounded-full px-2 py-1 text-[11px] leading-none font-semibold ${value === c ? "bg-white/25 text-white" : "text-white/60"}`}
+          aria-label={SIDES[c].name}
+          className={`inline-flex items-center gap-1 rounded-full py-0.5 pr-2 pl-0.5 text-[11px] leading-none font-semibold ${value === c ? "bg-white/25 text-white" : "text-white/60"}`}
         >
+          <Logo src={SIDES[c].logo} size={18} plate={SIDES[c].plate} />
           {SIDES[c].short}
         </button>
       ))}

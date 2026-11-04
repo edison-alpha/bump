@@ -91,14 +91,24 @@ export function HomeScreen() {
       <ChargeUpCard />
 
       {mode === "chain" && (
-        <Link href="/bridge" className="glass flex min-h-12 items-center gap-3 rounded-[12px] px-3 py-1.5">
-          <Icon name="bars" size={24} className="text-white" />
-          <span className="min-w-0 flex-1">
-            <span className="block font-display text-[16px] leading-tight font-bold">DEX</span>
-            <span className="block truncate text-[12px] text-white/75">Swap, bridge, send &amp; withdraw</span>
-          </span>
-          <Icon name="chevron" size={20} className="text-white" />
-        </Link>
+        <div className="grid grid-cols-2 gap-2">
+          <Link href="/bridge" className="glass flex min-h-12 items-center gap-2 rounded-[12px] px-3 py-1.5">
+            <Icon name="bars" size={22} className="shrink-0 text-white" />
+            <span className="min-w-0 flex-1">
+              <span className="block font-display text-[16px] leading-tight font-bold">DEX</span>
+              <span className="block truncate text-[11px] text-white/75">Swap &amp; bridge</span>
+            </span>
+            <Icon name="chevron" size={18} className="shrink-0 text-white" />
+          </Link>
+          <Link href="/positions" className="glass flex min-h-12 items-center gap-2 rounded-[12px] px-3 py-1.5">
+            <Icon name="target" size={22} className="shrink-0 text-white" />
+            <span className="min-w-0 flex-1">
+              <span className="block font-display text-[16px] leading-tight font-bold">Positions</span>
+              <span className="block truncate text-[11px] text-white/75">Your open trades</span>
+            </span>
+            <Icon name="chevron" size={18} className="shrink-0 text-white" />
+          </Link>
+        </div>
       )}
       <PriceNotice market={position ? markets.find((market) => market.id === position.marketId) ?? hot : hot} />
 
