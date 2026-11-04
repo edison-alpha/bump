@@ -37,6 +37,9 @@ async function withRetry<T>(fn: () => Promise<T>, tries = 4): Promise<T> {
 /** A position open on dreamDEX that bump has no trade record for (opened elsewhere): read from the chain, shown like any other. */
 type ExternalPosition = { pool: string; marketId: string; unprotected: boolean; position: Position };
 
+/** A 4xx the server will give again however often it is asked (a taken tx, a wrong side). Anything else is worth another try. */
+const isFinalRejection = (error: unknown) => error instanceof ApiError && error.status >= 400 && error.status < 500 && error.status !== 408 && error.status !== 429;
+
 const toPosition = (t: Trade): Position => ({
   id: t.id,
   marketId: t.marketId,
@@ -377,9 +380,16 @@ export function ChainTradeProvider({ address, tradingAccount, children }: { addr
         try {
           logged = await withRetry(() => api<OpenTradeResponse>("/api/trades", { body: { ...draft, txHash: placed.hash } }));
         } catch (error) {
-          step("open", { step: "done", warning: "Your trade is open, but bump couldn't record it yet. We'll keep trying." });
+          const final = isFinalRejection(error);
+          const why = error instanceof ApiError && error.message.length < 110 ? error.message : "";
+          step("open", {
+            step: "done",
+            warning: final
+              ? `Your trade is open on dreamDEX, but bump couldn't record it${why ? `: ${why}` : "."} Find it in Positions.`
+              : "Your trade is open, but bump couldn't record it yet. We'll keep trying.",
+          });
           void refresh();
-          if (error instanceof ApiError && error.status >= 400 && error.status < 500) writeJson(unloggedKey(address), null);
+          if (final) writeJson(unloggedKey(address), null);
           return true;
         }
         writeJson(unloggedKey(address), null);
@@ -701,7 +711,15 @@ export function ChainTradeProvider({ address, tradingAccount, children }: { addr
 
   const dismissPending = useCallback(() => setPending(null), []);
 
-  // a fill the backend never confirmed (the network died right after the order): confirm it now
+  // a fill the backend never confirmed (the network died right after the order, or its node had not seen it yet): keep
+  // asking until it is recorded or the server says it never will
+  const [logRetry, setLogRetry] = useState(0);
+  useEffect(() => {
+    const id = setInterval(() => {
+      if (readJson(unloggedKey(address))) setLogRetry((n) => n + 1);
+    }, 8_000);
+    return () => clearInterval(id);
+  }, [address]);
   useEffect(() => {
     if (!trades.isSuccess || trades.data.open) return;
     const lost = readJson<{ txHash: string; draft: Draft }>(unloggedKey(address));
@@ -712,9 +730,9 @@ export function ChainTradeProvider({ address, tradingAccount, children }: { addr
         void refresh();
       })
       .catch((error) => {
-        if (error instanceof ApiError && error.status >= 400 && error.status < 500) writeJson(unloggedKey(address), null);
+        if (isFinalRejection(error)) writeJson(unloggedKey(address), null);
       });
-  }, [trades.isSuccess, trades.data?.open, address, refresh]);
+  }, [trades.isSuccess, trades.data?.open, address, refresh, logRetry]);
 
   // a closed trade's receipt is only needed until the history carries it
   const lastClosed = receipt && receipt.closedAt >= (history[0]?.closedAt ?? 0) ? receipt : (history[0] ?? null);
