@@ -492,11 +492,38 @@ export function ChainTradeProvider({ address, tradingAccount, children }: { addr
     [tradingAccount, collateral, scale, wallet, wallets, address, refresh],
   );
 
-  // No faucet here: the balance is the player's own USDso. "Refill" re-reads it, so USDso just sent shows up at once.
+  // "Refill" re-reads the balance, so USDso just sent shows up at once. An account that never claimed dreamDEX's one-time
+  // 1,000 USDso voucher claims it here (it must be flat; the chain says why when it can't).
   const refill = useCallback(async () => {
     await refresh();
+    if (bank && !busy.current) {
+      const eligibility = await exchange().client.getPerpVoucherEligibility(bank, account).catch(() => null);
+      if (eligibility?.eligible) {
+        busy.current = true;
+        try {
+          const trader = await signer();
+          await trader.claimPerpVoucher({ marginBank: bank });
+          await refresh();
+          return;
+        } catch (error) {
+          throw new Error(shortError(error));
+        } finally {
+          busy.current = false;
+        }
+      }
+      const why: Record<string, string> = {
+        alreadyClaimed: "This account already claimed its voucher.",
+        notFlat: "Close your open positions and orders to claim the voucher.",
+        mainFunded: "This account is funded by a main wallet, so it can't claim the voucher.",
+        budgetExhausted: "The voucher budget is used up.",
+        notStarted: "The voucher campaign hasn't started.",
+        ended: "The voucher campaign has ended.",
+      };
+      const reasonText = eligibility && "reason" in eligibility ? why[String(eligibility.reason)] : undefined;
+      if (reasonText) throw new Error(`${reasonText} Send USDso (Somnia Tokyo testnet) to ${account} to trade.`);
+    }
     throw new Error(`Send USDso (Somnia Tokyo testnet) to ${account} to trade.`);
-  }, [refresh, account]);
+  }, [refresh, account, bank, signer]);
 
   const previewClose = useCallback(
     async (percent: number): Promise<number | null> => {
