@@ -75,10 +75,10 @@ export type TradeContextValue = {
   withdraw: ((amount: string) => Promise<void>) | null;
   /** Chain, linked account only: sends USDso from the sign-in wallet to the dreamDEX smart account (decimal string). Null otherwise. */
   moveToAccount: ((amount: string) => Promise<void>) | null;
-  /** Chain: closes `percent` (1-100, default all) of an on-chain position by its pool address, one bump did not open included. Null in practice mode. */
-  closeOnChain: ((pool: string, percent?: number) => Promise<void>) | null;
-  /** Chain: replaces the TP/SL on an on-chain position, measured from the current price (percent up and down). Null in practice mode. */
-  setLimitsOnChain: ((pool: string, targetPct: number, stopPct: number) => Promise<void>) | null;
+    /** Chain: set while the open position is one on dreamDEX that bump has no trade record for (opened elsewhere): it can be closed and given a TP/SL, nothing more. */
+  external: { unprotected: boolean } | null;
+  /** Chain: makes an on-chain position (by pool address) the one the position screens show, when bump has no trade of its own open. */
+  focusPosition: ((pool: string) => void) | null;
   updateLimits: (limits: Pick<Position, "targetPct" | "stopPct">) => Promise<boolean>;
   /** Closes `percent` (1-100) of the open position at about `exit`, resolves the receipt. */
   closePosition: (percent: number, exit: number, reason?: CloseReason) => Promise<ClosedTrade | null>;

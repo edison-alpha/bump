@@ -20,6 +20,7 @@ import { pnlOnMarginPct, priceMovePct, stopPrice, targetPrice, targetProgress, u
 import { KeyHint } from "../components/key-hint";
 import { PositionChart } from "../components/position-chart";
 import { SideChip } from "../components/trade-header";
+import { useTrade } from "../trade-provider";
 import { useRequirePosition } from "../use-require-position";
 import { haptic } from "@/lib/haptics";
 
@@ -68,6 +69,7 @@ const zoneOf = (p: number) => (p >= 0.5 ? 1 : p <= -0.5 ? -1 : 0);
 
 export function LivePositionScreen() {
   const position = useRequirePosition();
+  const { external } = useTrade();
   const market = useMarket(position?.marketId ?? "btc");
   const { flash } = useConsole();
   const [timeframe, setTimeframe] = useState<Timeframe>("1s");
@@ -113,6 +115,7 @@ export function LivePositionScreen() {
   return (
     <Screen title="Your position" className="[&>*]:shrink-0" right={<LiveChip live={market.priceStatus === "live"} />}>
       <PriceNotice market={market} />
+      {external?.unprotected && <p className="text-[12px] leading-snug text-gold">No TP/SL is set on this position. Tap the gear to set one.</p>}
       <Coach step={3} points={null}>
         You’re in! Price hits the green line = you win, the red line = the stop saves you. Or hold{" "}
         <KeyName tone="gold">BUMP</KeyName> to close anytime.

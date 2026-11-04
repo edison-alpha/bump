@@ -4,6 +4,7 @@ import { isPerpMarket } from "@somnia-chain/markets-sdk";
 import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
 import { formatUnits, type Address } from "viem";
+import { useConsole } from "@/components/console/console-provider";
 import { Screen } from "@/components/shell/screen";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -41,7 +42,10 @@ const qty = (value: number) => value.toLocaleString("en-US", { maximumFractionDi
  * linked dreamDEX smart account when there is one, the wallet otherwise.
  */
 export function PositionsScreen() {
-  const { setup, position, mode } = useTrade();
+  const { setup, position, mode, external, focusPosition } = useTrade();
+  const { flash } = useConsole();
+  /** A trade bump has its own record of: it takes the position screens, so another position has to wait for it. */
+  const ownTrade = !!position && !external;
   const account = setup?.account as Address | undefined;
 
   const positions = useQuery({
@@ -142,7 +146,7 @@ export function PositionsScreen() {
       )}
 
       {rows.map((r) => {
-        const tracked = !!position && !!r.marketId && position.marketId === r.marketId;
+        const shown = !ownTrade || (!!r.marketId && position?.marketId === r.marketId);
         const body = (
           <Card className="flex flex-col gap-1.5 px-3 py-2">
             <div className="flex items-center gap-2.5">
@@ -171,7 +175,20 @@ export function PositionsScreen() {
           </Card>
         );
         return (
-          <Link key={r.symbol} href={tracked ? "/position" : `/positions/${r.pool}`} aria-label={`Open your ${r.symbol} position`}>
+          <Link
+            key={r.symbol}
+            href="/position"
+            aria-label={`Open your ${r.symbol} position`}
+            onClick={(event) => {
+              if (!shown) {
+                event.preventDefault();
+                flash("Close your current trade first, then open this one.", "warn");
+                return;
+              }
+              // the position screens show this one (a no-op when it is the trade bump already tracks)
+              focusPosition?.(r.pool);
+            }}
+          >
             {body}
           </Link>
         );

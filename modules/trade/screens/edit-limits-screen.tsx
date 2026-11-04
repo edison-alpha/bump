@@ -23,8 +23,11 @@ export function EditLimitsScreen() {
   const [stop, setStop] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
 
-  const targetPct = target ?? position?.targetPct ?? 0;
-  const stopPct = stop ?? position?.stopPct ?? 0;
+  // a position with no TP/SL yet (opened elsewhere) starts at the Chill pair rather than 0 / 0
+  const baseTarget = position?.targetPct || 1;
+  const baseStop = position?.stopPct || 0.5;
+  const targetPct = target ?? baseTarget;
+  const stopPct = stop ?? baseStop;
   // on chain this cancels the old TP/SL and arms the new pair, so it takes a couple of transactions
   const save = () => {
     if (saving) return;
@@ -47,7 +50,7 @@ export function EditLimitsScreen() {
       <DialField
         id="target"
         label="Profit target"
-        onStep={(dir) => setTarget((t) => stepPct(t ?? position.targetPct, dir))}
+        onStep={(dir) => setTarget((t) => stepPct(t ?? baseTarget, dir))}
         readout={targetReadout(targetPct, targetPrice(position.entry, next))}
       >
         <LimitRow kind="target" value={targetPct} onChange={setTarget} />
@@ -55,7 +58,7 @@ export function EditLimitsScreen() {
       <DialField
         id="stop"
         label="Stop loss"
-        onStep={(dir) => setStop((s) => stepPct(s ?? position.stopPct, dir, 0.5, 10))}
+        onStep={(dir) => setStop((s) => stepPct(s ?? baseStop, dir, 0.5, 10))}
         readout={stopReadout(stopPct, stopPrice(position.entry, next))}
       >
         <LimitRow kind="stop" value={stopPct} onChange={setStop} />

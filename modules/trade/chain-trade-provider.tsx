@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useWallets } from "@privy-io/react-auth";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { createPublicClient, createWalletClient, custom, erc20Abi, formatEther, parseUnits, type Address } from "viem";
+import { createPublicClient, createWalletClient, custom, erc20Abi, formatEther, formatUnits, parseUnits, type Address } from "viem";
 import { api, ApiError } from "@/lib/api/client";
 import { qk } from "@/lib/api/query";
 import type { CloseTradeResponse, OpenTradeResponse, Trade, TradesResponse } from "@/lib/api/types";
@@ -33,6 +33,9 @@ async function withRetry<T>(fn: () => Promise<T>, tries = 4): Promise<T> {
     }
   }
 }
+
+/** A position open on dreamDEX that bump has no trade record for (opened elsewhere): read from the chain, shown like any other. */
+type ExternalPosition = { pool: string; marketId: string; unprotected: boolean; position: Position };
 
 const toPosition = (t: Trade): Position => ({
   id: t.id,
@@ -106,7 +109,49 @@ export function ChainTradeProvider({ address, tradingAccount, children }: { addr
     refetchInterval: (q) => (q.state.data?.open ? 5_000 : 30_000),
   });
   const open = trades.data?.open ?? null;
-  const position = useMemo(() => (open ? toPosition(open) : null), [open]);
+  // With no trade of its own open, bump still shows what is open on the account: a position opened elsewhere (or whose
+  // record is gone) holds margin all the same, and the player has to be able to see it, close it and protect it.
+  const [focusPool, setFocusPool] = useState<string | null>(null);
+  const scanning = !open && trades.isSuccess && !!markets;
+  const externals = useQuery({
+    queryKey: ["bump", "chain", "external", account],
+    enabled: scanning,
+    refetchInterval: 10_000,
+    queryFn: async (): Promise<ExternalPosition[]> => {
+      const { client } = exchange();
+      const found = await Promise.all(
+        Object.entries(markets ?? {}).map(async ([marketId, m]): Promise<ExternalPosition | null> => {
+          try {
+            const p = await client.getPerpPosition({ marginBank: m.marginBank as Address, account, pool: m.poolAddress });
+            if (p.size === 0n) return null;
+            const long = p.size > 0n;
+            const entry = humanPrice(p.avgEntryPrice, m);
+            const notional = Number(formatUnits(long ? p.size : -p.size, m.baseDecimals)) * entry;
+            const stops = m.stopRegistry ? await client.listPerpStopOrders({ account, pool: m.poolAddress, status: ["PENDING"] }).catch(() => []) : [];
+            // a stop that fires above is the target of a long and the stop of a short; below is the reverse
+            const target = stops.find((s) => (s.triggerOperator === 0) === long);
+            const stop = stops.find((s) => (s.triggerOperator === 0) !== long);
+            const pct = (s?: (typeof stops)[number]) => (s && entry > 0 ? Math.abs(humanPrice(BigInt(s.triggerPrice), m) / entry - 1) * 100 : 0);
+            const lev = (await client.getPerpLeverage({ marginBank: m.marginBank as Address, account, pool: m.poolAddress }).catch(() => null)) as unknown as { positionLeverageBps?: bigint | number } | null;
+            // the leverage the account actually runs this position at, so the stake and the profit on it read true
+            const leverage = Math.max(1, Math.round(Number(lev?.positionLeverageBps ?? 0) / 10_000));
+            return {
+              pool: m.poolAddress,
+              marketId,
+              unprotected: !target && !stop,
+              position: { id: `chain:${m.poolAddress}`, marketId, side: long ? "long" : "short", entry, margin: notional / leverage, leverage, targetPct: pct(target), stopPct: pct(stop), openedAt: Date.now() },
+            };
+          } catch {
+            return null;
+          }
+        }),
+      );
+      return found.filter((e): e is ExternalPosition => e !== null).sort((a, b) => b.position.margin - a.position.margin);
+    },
+  });
+  const external = !open ? ((externals.data ?? []).find((e) => e.pool.toLowerCase() === focusPool?.toLowerCase()) ?? externals.data?.[0] ?? null) : null;
+  const position = useMemo(() => (open ? toPosition(open) : (external?.position ?? null)), [open, external]);
+  const focusPosition = useCallback((pool: string) => setFocusPool(pool), []);
   const history = useMemo(() => (trades.data?.history ?? []).map(toClosed), [trades.data?.history]);
 
   /** The perps collateral (USDso) is the market row's quote token, not the SDK address set's `collateral` entry. */
@@ -361,8 +406,106 @@ export function ChainTradeProvider({ address, tradingAccount, children }: { addr
     [blocker, row, draft, signer, heldCollateral, markOf, armStops, address, queryClient, refresh, step],
   );
 
+  /** Cancels the pending stops on one pool (refunding their STT), by the chain's own list rather than this device's memory. */
+  const cancelPoolStops = useCallback(
+    async (trader: Awaited<ReturnType<typeof signer>>, r: NonNullable<typeof row>) => {
+      if (!r.stopRegistry) return;
+      let ids: bigint[];
+      try {
+        ids = (await exchange().client.listPerpStopOrders({ account, pool: r.poolAddress, status: ["PENDING"] })).map((s) => BigInt(s.orderIdRaw));
+      } catch {
+        return;
+      }
+      if (ids.length === 0) return;
+      try {
+        await trader.cancelPerpStopOrders({ registry: r.stopRegistry as Address, orderIds: ids });
+      } catch {
+        // already triggered or cancelled
+      }
+    },
+    [account],
+  );
+
+  const failure = (error: unknown) =>
+    new Error(error instanceof Error && !(error as { errorName?: string }).errorName && error.message.length < 90 ? error.message : shortError(error));
+
+  /** Closes `percent` of the on-chain position externals shows. There is no trade record to settle; resolves the fill for the receipt. */
+  const closeExternal = useCallback(
+    async (percent: number): Promise<ClosedTrade | null> => {
+      const e = external;
+      const r = e ? markets?.[e.marketId] : undefined;
+      if (!e || !r) return null;
+      if (busy.current) throw new Error("Another action is still running. Try again in a moment.");
+      busy.current = true;
+      try {
+        const trader = await signer();
+        const client = exchange().client;
+        const onChain = await client.getPerpPosition({ marginBank: r.marginBank as Address, account, pool: r.poolAddress });
+        if (onChain.size === 0n) {
+          void refresh();
+          throw new Error("That position already closed.");
+        }
+        const order = closeToOrder({ side: onChain.size > 0n ? "long" : "short", sizeRaw: onChain.size }, percent, r, await markOf(r));
+        const pv = await client.previewPerpClosePnl({ pool: r.poolAddress, marginBank: r.marginBank as Address, account, ...(percent < 100 ? { quantity: order.quantity } : {}) }).catch(() => null);
+        const placed = await trader.placePerpOrder(order);
+        if (placed.fills.length === 0) throw new Error("No fill at this price. Nothing was closed, try again.");
+        // the stops are sized to the whole position, so they only go when all of it is gone
+        if (percent >= 100) await cancelPoolStops(trader, r);
+        const closed: ClosedTrade = {
+          id: `chain:${e.pool}:${placed.hash.slice(2, 10)}`,
+          marketId: e.marketId,
+          side: e.position.side,
+          leverage: e.position.leverage,
+          margin: round2(e.position.margin * (percent / 100)),
+          entry: e.position.entry,
+          exit: pv?.priceable ? humanPrice(pv.fillPrice, r) : humanPrice(order.price, r),
+          pnl: pv?.priceable ? round2(usdOf(pv.realizedPnl, r)) : 0,
+          closedAt: Date.now(),
+          reason: "manual",
+        };
+        sfx.close(closed.pnl);
+        setReceipt(closed);
+        await refresh();
+        return closed;
+      } catch (error) {
+        throw failure(error);
+      } finally {
+        busy.current = false;
+      }
+    },
+    [external, markets, signer, account, markOf, cancelPoolStops, refresh],
+  );
+
+  /**
+   * Replaces the TP/SL on the on-chain position externals shows. Measured from the current price, not the entry: a position
+   * that is already underwater would otherwise get a stop on the wrong side of the market, which fires at once.
+   */
+  const limitExternal = useCallback(
+    async (targetPct: number, stopPct: number) => {
+      const e = external;
+      const r = e ? markets?.[e.marketId] : undefined;
+      if (!e || !r) throw new Error("There's no position to protect.");
+      if (busy.current) throw new Error("Another action is still running. Try again in a moment.");
+      busy.current = true;
+      try {
+        const trader = await signer();
+        const onChain = await exchange().client.getPerpPosition({ marginBank: r.marginBank as Address, account, pool: r.poolAddress });
+        if (onChain.size === 0n) throw new Error("That position is already closed.");
+        await cancelPoolStops(trader, r);
+        await trader.placePerpStopOrder(limitsToStops(onChain.size > 0n ? "long" : "short", await markOf(r), targetPct, stopPct, r));
+        await refresh();
+      } catch (error) {
+        throw failure(error);
+      } finally {
+        busy.current = false;
+      }
+    },
+    [external, markets, signer, account, markOf, cancelPoolStops, refresh],
+  );
+
   const closePosition = useCallback(
     async (percent: number, _exitHint: number, _reason: CloseReason = "manual"): Promise<ClosedTrade | null> => {
+      if (!open && external) return closeExternal(percent);
       const t = open;
       const r = t ? markets?.[t.marketId] : undefined;
       if (!t || !r || busy.current) return null;
@@ -412,94 +555,15 @@ export function ChainTradeProvider({ address, tradingAccount, children }: { addr
         busy.current = false;
       }
     },
-    [open, markets, signer, account, markOf, cancelStops, address, queryClient, refresh, step],
-  );
-
-  /** Cancels the pending stops on one pool (refunding their STT), by the chain's own list rather than this device's memory. */
-  const cancelPoolStops = useCallback(
-    async (trader: Awaited<ReturnType<typeof signer>>, r: NonNullable<typeof row>) => {
-      if (!r.stopRegistry) return;
-      let ids: bigint[];
-      try {
-        ids = (await exchange().client.listPerpStopOrders({ account, pool: r.poolAddress, status: ["PENDING"] })).map((s) => BigInt(s.orderIdRaw));
-      } catch {
-        return;
-      }
-      if (ids.length === 0) return;
-      try {
-        await trader.cancelPerpStopOrders({ registry: r.stopRegistry as Address, orderIds: ids });
-      } catch {
-        // already triggered or cancelled
-      }
-    },
-    [account],
-  );
-
-  const onChainMarket = useCallback((pool: string) => (markets ? Object.values(markets).find((m) => m.poolAddress.toLowerCase() === pool.toLowerCase()) : undefined), [markets]);
-  const isTracked = useCallback((r: NonNullable<typeof row>) => !!open && markets?.[open.marketId]?.poolAddress.toLowerCase() === r.poolAddress.toLowerCase(), [open, markets]);
-  const failure = (error: unknown) =>
-    new Error(error instanceof Error && !(error as { errorName?: string }).errorName && error.message.length < 90 ? error.message : shortError(error));
-
-  /** Closes `percent` of an on-chain position by pool, one bump did not open included. A tracked trade closes through its own flow. */
-  const closeOnChain = useCallback(
-    async (pool: string, percent = 100) => {
-      const r = onChainMarket(pool);
-      if (!r) throw new Error("bump can't close that market yet.");
-      if (isTracked(r)) throw new Error("Close this trade from its own screen.");
-      if (busy.current) throw new Error("Another action is still running. Try again in a moment.");
-      busy.current = true;
-      try {
-        const trader = await signer();
-        const onChain = await exchange().client.getPerpPosition({ marginBank: r.marginBank as Address, account, pool: r.poolAddress });
-        if (onChain.size === 0n) {
-          void refresh();
-          return;
-        }
-        const order = closeToOrder({ side: onChain.size > 0n ? "long" : "short", sizeRaw: onChain.size }, percent, r, await markOf(r));
-        const placed = await trader.placePerpOrder(order);
-        if (placed.fills.length === 0) throw new Error("No fill at this price. Nothing was closed, try again.");
-        // the stops are sized to the whole position, so they only go when all of it is gone
-        if (percent >= 100) await cancelPoolStops(trader, r);
-        await refresh();
-      } catch (error) {
-        throw failure(error);
-      } finally {
-        busy.current = false;
-      }
-    },
-    [onChainMarket, isTracked, signer, account, markOf, cancelPoolStops, refresh],
-  );
-
-  /**
-   * Replaces the TP/SL on an on-chain position. Measured from the current price, not the entry: a position that is
-   * already underwater would otherwise get a stop on the wrong side of the market, which fires at once.
-   */
-  const setLimitsOnChain = useCallback(
-    async (pool: string, targetPct: number, stopPct: number) => {
-      const r = onChainMarket(pool);
-      if (!r) throw new Error("bump can't set limits on that market yet.");
-      if (isTracked(r)) throw new Error("Edit this trade's limits from its own screen.");
-      if (busy.current) throw new Error("Another action is still running. Try again in a moment.");
-      busy.current = true;
-      try {
-        const trader = await signer();
-        const onChain = await exchange().client.getPerpPosition({ marginBank: r.marginBank as Address, account, pool: r.poolAddress });
-        if (onChain.size === 0n) throw new Error("That position is already closed.");
-        const side = onChain.size > 0n ? "long" : "short";
-        await cancelPoolStops(trader, r);
-        await trader.placePerpStopOrder(limitsToStops(side, await markOf(r), targetPct, stopPct, r));
-        await refresh();
-      } catch (error) {
-        throw failure(error);
-      } finally {
-        busy.current = false;
-      }
-    },
-    [onChainMarket, isTracked, signer, account, markOf, cancelPoolStops, refresh],
+    [open, external, closeExternal, markets, signer, account, markOf, cancelStops, address, queryClient, refresh, step],
   );
 
   const updateLimits = useCallback(
     async (limits: Pick<Position, "targetPct" | "stopPct">) => {
+      if (!open && external) {
+        await limitExternal(limits.targetPct, limits.stopPct);
+        return true;
+      }
       const t = open;
       const r = t ? markets?.[t.marketId] : undefined;
       if (!t || !r || busy.current) return false;
@@ -527,7 +591,7 @@ export function ChainTradeProvider({ address, tradingAccount, children }: { addr
         busy.current = false;
       }
     },
-    [open, markets, signer, cancelStops, armStops, refresh, step],
+    [open, external, limitExternal, markets, signer, cancelStops, armStops, refresh, step],
   );
 
   /** Pulls free collateral out of the MarginBank back to the trading account. `amount` is a decimal string of USDso. */
@@ -617,7 +681,7 @@ export function ChainTradeProvider({ address, tradingAccount, children }: { addr
 
   const previewClose = useCallback(
     async (percent: number): Promise<number | null> => {
-      const t = open;
+      const t = open ?? (external ? { marketId: external.marketId } : null);
       const r = t ? markets?.[t.marketId] : undefined;
       if (!t || !r) return null;
       try {
@@ -632,7 +696,7 @@ export function ChainTradeProvider({ address, tradingAccount, children }: { addr
         return null;
       }
     },
-    [open, markets, account],
+    [open, external, markets, account],
   );
 
   const dismissPending = useCallback(() => setPending(null), []);
@@ -661,7 +725,7 @@ export function ChainTradeProvider({ address, tradingAccount, children }: { addr
       draft,
       position,
       history,
-      ready: !trades.isPending,
+      ready: !trades.isPending && !(scanning && externals.isPending),
       balance,
       available,
       broke,
@@ -676,14 +740,14 @@ export function ChainTradeProvider({ address, tradingAccount, children }: { addr
       refill,
       withdraw,
       moveToAccount: tradingAccount ? moveToAccount : null,
-      closeOnChain,
-      setLimitsOnChain,
+      external: external ? { unprotected: external.unprotected } : null,
+      focusPosition,
       updateLimits,
       closePosition,
       previewClose,
       dismissPending,
     }),
-    [draft, position, history, trades.isPending, balance, available, broke, blocker, maxLeverage, lastClosed, pending, setup, patchDraft, openPosition, refill, withdraw, moveToAccount, tradingAccount, closeOnChain, setLimitsOnChain, updateLimits, closePosition, previewClose, dismissPending],
+    [draft, position, history, trades.isPending, balance, available, broke, blocker, maxLeverage, lastClosed, pending, setup, patchDraft, openPosition, refill, withdraw, moveToAccount, tradingAccount, external, focusPosition, updateLimits, closePosition, previewClose, dismissPending],
   );
 
   return <TradeContext.Provider value={value}>{children}</TradeContext.Provider>;
