@@ -1,33 +1,23 @@
 "use client";
 
-import { useWallets } from "@privy-io/react-auth";
+import { useWallets, type ConnectedWallet } from "@privy-io/react-auth";
 import { DEFAULT_FEES } from "@somnia-chain/markets-sdk";
-import { BridgeToken, ChainId, createBridgeTransfer, getBridgeToken, somniaShannon } from "@somnia-chain/markets-sdk/chains";
+import { createBridgeTransfer } from "@somnia-chain/markets-sdk/chains";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState, type ReactNode } from "react";
-import { createPublicClient, createWalletClient, custom, erc20Abi, formatUnits, http, numberToHex, parseAbi, parseUnits, type Address, type Hex } from "viem";
+import { createWalletClient, custom, erc20Abi, formatUnits, numberToHex, parseUnits, type Address, type Hex, type TransactionReceipt } from "viem";
 import { useConsole } from "@/components/console/console-provider";
 import { Screen } from "@/components/shell/screen";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { shortError } from "@/lib/bump/dreamdex";
+import { ASSETS, bridgeClient, GAS_ENVELOPE_STT, isDelivered, messageIdOf, otherSide, routeIsUp, routeOf, SIDES, type BridgeAsset, type BridgeSide } from "@/lib/chain/bridge";
 import { exchange } from "@/lib/chain/exchange";
-import { useChainMarkets } from "@/lib/chain/markets";
 import { BridgeProgress, type BridgeRun } from "../components/bridge-progress";
 import { useTrade } from "@/modules/trade/trade-provider";
 
 /** The SDK's fixed gas ceiling; the wallet needs gas × max fee (0.6 STT) on hand, though unused gas is never charged. */
 const BRIDGE_GAS = 10_000_000n;
-const origin = getBridgeToken(BridgeToken.USDso, ChainId.somniaShannon);
-const originClient = createPublicClient({ chain: somniaShannon, transport: http() });
-
-/** Logos are the projects' own marks, stored in public/tokens (sources in SOURCES.md). */
-const SOMNIA = { name: "Somnia Testnet", logo: "/tokens/somnia.png", plate: "bg-white" };
-const HIDEKI = { name: "Hideki Testnet", logo: "/tokens/dreamdex.png", plate: "bg-navy-950" };
-const USDSO_LOGO = "/tokens/usdso.png";
-
-const routerAbi = parseAbi(["function quoteGasPayment(uint32 destinationDomain) view returns (uint256)"]);
-const ROUTE_DOWN = "The USDso bridge route is down on Somnia's side right now (its gas hook reverts). Nothing was sent, and your USDso is safe.";
 
 const short = (address: string) => `${address.slice(0, 6)}…${address.slice(-4)}`;
 const amountOf = (value: string, max = 4) => Number(value).toLocaleString("en-US", { maximumFractionDigits: max });
@@ -40,7 +30,8 @@ function Logo({ src, size, plate }: { src: string; size: number; plate?: string 
   );
 }
 
-function NetworkPill({ network }: { network: typeof SOMNIA }) {
+function NetworkPill({ side }: { side: BridgeSide }) {
+  const network = SIDES[side];
   return (
     <span className="inline-flex items-center gap-1.5 rounded-full bg-white/10 py-1 pr-3 pl-1 text-[13px] font-semibold">
       <Logo src={network.logo} size={20} plate={network.plate} />
@@ -49,21 +40,21 @@ function NetworkPill({ network }: { network: typeof SOMNIA }) {
   );
 }
 
-function TokenPill() {
+function TokenPill({ asset }: { asset: BridgeAsset }) {
   return (
     <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-white/10 py-1 pr-3 pl-1 font-display text-[16px] font-bold">
-      <Logo src={USDSO_LOGO} size={26} />
-      USDso
+      <Logo src={ASSETS[asset].logo} size={26} />
+      {asset}
     </span>
   );
 }
 
-function Side({ label, network, trailing, children }: { label: string; network: typeof SOMNIA; trailing?: ReactNode; children: ReactNode }) {
+function Side({ label, side, trailing, children }: { label: string; side: BridgeSide; trailing?: ReactNode; children: ReactNode }) {
   return (
     <Card className="flex flex-col gap-2 px-3 py-2.5">
       <div className="flex items-center justify-between">
         <span className="text-[13px] text-white/70">{label}</span>
-        <NetworkPill network={network} />
+        <NetworkPill side={side} />
       </div>
       <div className="flex items-center gap-2">{children}</div>
       {trailing}
@@ -71,10 +62,23 @@ function Side({ label, network, trailing, children }: { label: string; network: 
   );
 }
 
+/** Puts the wallet on `chainId`. switchChain can resolve while the provider still reports the old chain, so ask the provider too. */
+async function switchTo(privy: ConnectedWallet, chainId: number, name: string) {
+  const provider = await privy.getEthereumProvider();
+  const chainIdOf = async () => Number(await provider.request({ method: "eth_chainId" }));
+  await privy.switchChain(chainId);
+  if ((await chainIdOf()) !== chainId) await provider.request({ method: "wallet_switchEthereumChain", params: [{ chainId: numberToHex(chainId) }] });
+  for (let i = 0; i < 20 && (await chainIdOf()) !== chainId; i++) await new Promise((resolve) => setTimeout(resolve, 250));
+  const now = await chainIdOf();
+  if (now !== chainId) throw new Error(`Your wallet stayed on chain ${now}. Switch it to ${name} (${chainId}) and try again.`);
+  return provider;
+}
+
 /**
- * Bridge USDso from the general-purpose Somnia Testnet to Hideki, where bump trades, shaped like a swap: you pay on one
- * side, you receive on the other. This is the SDK's Hyperlane bridge; dreamDEX's "withdraw to Somnia" lands on the
- * Somnia side, so this is how that money comes back. The USDso goes straight to the account that trades.
+ * Move USDso or STT between Somnia Testnet and Hideki over Somnia's Hyperlane lane, the same bridge as the Somnia
+ * explorer's. Going in, the funds land in the account that trades. Going out, they leave that account (the wallet itself,
+ * or the linked dreamDEX smart account) and arrive in the wallet. Delivery is tracked by the transfer's own Hyperlane
+ * message id, not by watching a balance.
  */
 export function BridgeScreen() {
   const { setup, mode } = useTrade();
@@ -82,62 +86,59 @@ export function BridgeScreen() {
   const { flash } = useConsole();
   const queryClient = useQueryClient();
   const [value, setValue] = useState("");
+  const [asset, setAsset] = useState<BridgeAsset>("USDso");
+  const [from, setFrom] = useState<BridgeSide>("somnia");
+  const to = otherSide(from);
 
   const wallet = setup?.address as Address | undefined;
+  const account = setup?.account as Address | undefined;
+  /** Who holds the funds being sent: the wallet on Somnia, the trading account on Hideki. */
+  const sender = from === "somnia" ? wallet : account;
+  const recipient = to === "hideki" ? account : wallet;
+  const viaAccount = from === "hideki" && !!setup?.linked;
+  const { origin, destination, mailbox, originMailbox } = routeOf(asset, from);
+  const decimals = origin?.decimals ?? 18;
+  const native = origin?.model === "native";
 
   const held = useQuery({
-    queryKey: ["bump", "bridge", "somnia-usdso", wallet],
-    enabled: !!wallet && !!origin?.address,
+    queryKey: ["bump", "bridge", "balance", asset, from, sender],
+    enabled: !!sender && !!origin,
     refetchInterval: 10_000,
     queryFn: async () => {
-      const raw = await originClient.readContract({ address: origin?.address as Address, abi: erc20Abi, functionName: "balanceOf", args: [wallet as Address] });
-      return formatUnits(raw, origin?.decimals ?? 18);
+      const client = bridgeClient(from);
+      const raw = native ? await client.getBalance({ address: sender as Address }) : await client.readContract({ address: origin?.address as Address, abi: erc20Abi, functionName: "balanceOf", args: [sender as Address] });
+      return raw.toString();
     },
   });
-  const balance = held.data ?? "0";
+  const rawBalance = BigInt(held.data ?? "0");
+  const balance = formatUnits(rawBalance, decimals);
 
-  // The USDso router's gas hook decides whether transferRemote can run at all. When it reverts, so does every bridge
-  // (the STT router has no hook and quotes 0), and the approval would be gas spent for nothing. Asking it is free.
+  // the wallet signs and pays gas on the origin network; Somnia's mempool wants gas × max fee (0.6 STT) on hand
+  const gasHeld = useQuery({
+    queryKey: ["bump", "bridge", "gas", from, wallet],
+    enabled: !!wallet,
+    refetchInterval: 10_000,
+    queryFn: async () => (await bridgeClient(from).getBalance({ address: wallet as Address })).toString(),
+  });
+  const reserve = parseUnits(String(GAS_ENVELOPE_STT), 18);
+  // sending STT from the wallet itself: its gas envelope comes out of the same balance
+  const spendable = native && sender === wallet ? (rawBalance > reserve ? rawBalance - reserve : 0n) : rawBalance;
+  const spendableText = formatUnits(spendable, decimals);
+
+  // The router's gas hook decides whether transferRemote can run at all. When it reverts, so does every bridge, and the
+  // approval would be gas spent for nothing. Asking it is free.
   const route = useQuery({
-    queryKey: ["bump", "bridge", "route", origin?.router],
+    queryKey: ["bump", "bridge", "route", origin?.router, from],
     enabled: !!origin,
     refetchInterval: 60_000,
-    queryFn: async () => {
-      try {
-        await originClient.readContract({ address: origin?.router as Address, abi: routerAbi, functionName: "quoteGasPayment", args: [ChainId.hidekiTestnet] });
-        return true;
-      } catch {
-        return false;
-      }
-    },
+    queryFn: () => routeIsUp(from, origin?.router as Address),
   });
   const routeDown = route.data === false;
+  const routeDownText = `The ${asset} bridge route is down on ${SIDES[from].short}'s side right now (its gas hook reverts). Nothing was sent, and your ${asset} is safe.`;
 
   // the bridge in flight, kept in localStorage once it is sent so a reload keeps watching for the delivery
   const storeKey = `bump:bridge:${wallet}`;
   const [run, setRun] = useState<BridgeRun | null>(null);
-  useEffect(() => {
-    if (!wallet) return;
-    try {
-      const saved = localStorage.getItem(storeKey);
-      if (saved) {
-        const stored = JSON.parse(saved) as BridgeRun;
-        setRun(stored);
-        // a saved bridge is only believed once its transaction is confirmed as successful on Somnia Testnet; earlier
-        // versions saved reverted ones as "sent", and those must not keep showing a delivery that can never come
-        if (stored.stage === "deliver" && stored.bridgeHash) {
-          originClient
-            .getTransactionReceipt({ hash: stored.bridgeHash as Hex })
-            .then((receipt) => {
-              if (receipt.status !== "success") update({ stage: "failed", failedAt: "send", error: "Bridging: the transaction reverted on Somnia Testnet, no USDso moved." });
-            })
-            .catch(() => undefined);
-        }
-      }
-    } catch {
-      // storage unavailable: a reload just forgets the progress card, the funds are unaffected
-    }
-  }, [wallet, storeKey]);
   const update = (patch: Partial<BridgeRun> | null) => {
     setRun((current) => {
       const next = patch === null || !current ? null : { ...current, ...patch };
@@ -145,14 +146,38 @@ export function BridgeScreen() {
         if (next && (next.stage === "deliver" || next.stage === "done")) localStorage.setItem(storeKey, JSON.stringify(next));
         else localStorage.removeItem(storeKey);
       } catch {
-        // see above
+        // storage unavailable: a reload just forgets the progress card, the funds are unaffected
       }
       return next;
     });
   };
+  useEffect(() => {
+    if (!wallet) return;
+    try {
+      const saved = localStorage.getItem(storeKey);
+      if (!saved) return;
+      const stored = JSON.parse(saved) as Partial<BridgeRun>;
+      // a bridge saved before routes had two directions can't be tracked by message id: forget it
+      if (!stored.from || !stored.asset) {
+        localStorage.removeItem(storeKey);
+        return;
+      }
+      setRun(stored as BridgeRun);
+      // a saved bridge is only believed once its transaction is confirmed as successful on its origin network
+      if (stored.stage === "deliver" && stored.bridgeHash) {
+        bridgeClient(stored.from)
+          .getTransactionReceipt({ hash: stored.bridgeHash as Hex })
+          .then((receipt) => {
+            if (receipt.status !== "success") update({ stage: "failed", failedAt: "send", error: `Bridging: the transaction reverted on ${stored.fromName}, nothing moved.` });
+          })
+          .catch(() => undefined);
+      }
+    } catch {
+      // see above
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [wallet, storeKey]);
 
-  const { data: markets } = useChainMarkets();
-  const hidekiToken = (markets ? Object.values(markets)[0]?.quoteToken : undefined) as Address | undefined;
   const delivering = run?.stage === "deliver";
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
@@ -161,37 +186,44 @@ export function BridgeScreen() {
     return () => clearInterval(id);
   }, [delivering]);
 
-  // delivery: the relayer mints USDso to the recipient on Hideki, so its balance there rises by the amount
+  // delivery: the destination Mailbox reports the message as processed
+  const runTo = run ? otherSide(run.from) : to;
+  const runMailbox = run ? routeOf(run.asset as BridgeAsset, run.from).mailbox : null;
   const arrived = useQuery({
-    queryKey: ["bump", "bridge", "hideki-usdso", run?.recipient, hidekiToken],
-    enabled: delivering && !!hidekiToken && !!run,
+    queryKey: ["bump", "bridge", "delivered", run?.messageId],
+    enabled: delivering && !!run?.messageId && !!runMailbox,
     refetchInterval: 3_000,
-    queryFn: async () => {
-      const [raw] = await exchange().client.getBalances([{ token: hidekiToken as Address }], run?.recipient as Address);
-      return (raw ?? 0n).toString();
-    },
+    queryFn: () => isDelivered(runTo, runMailbox as Address, run?.messageId as Hex),
   });
   useEffect(() => {
-    if (!run || run.stage !== "deliver" || arrived.data === undefined || !origin) return;
-    if (BigInt(arrived.data) < BigInt(run.before) + parseUnits(run.amount, origin.decimals)) return;
+    if (!run || run.stage !== "deliver" || arrived.data !== true) return;
     update({ stage: "done" });
     void queryClient.invalidateQueries({ queryKey: ["bump", "chain"] });
-    flash("Your USDso arrived on Hideki.", "good");
+    void held.refetch();
+    flash(`Your ${run.asset} arrived on ${run.toName}.`, "good");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [arrived.data, run]);
 
   const bridge = useMutation({
     mutationFn: async (amount: string) => {
-      if (!setup || !wallet || !origin || !hidekiToken) throw new Error("Your wallet isn't ready yet.");
-      if (routeDown) throw new Error(ROUTE_DOWN);
-      const raw = parseUnits(amount, origin.decimals);
+      if (!setup || !wallet || !account || !recipient || !origin || !destination || !originMailbox) throw new Error("Your wallet isn't ready yet.");
+      if (routeDown) throw new Error(routeDownText);
+      const raw = parseUnits(amount, decimals);
       if (raw <= 0n) throw new Error("Enter an amount to bridge.");
-      if (raw > parseUnits(balance, origin.decimals)) throw new Error(`Your wallet holds ${amountOf(balance)} USDso on Somnia Testnet.`);
+      if (raw > rawBalance) throw new Error(`${from === "hideki" && viaAccount ? "Your dreamDEX account holds" : "Your wallet holds"} ${amountOf(balance)} ${asset} on ${SIDES[from].name}.`);
+      if (raw > spendable) throw new Error(`Keep ${GAS_ENVELOPE_STT} STT in your wallet for gas. You can bridge up to ${amountOf(spendableText)} ${asset}.`);
+      const gas = BigInt(gasHeld.data ?? "0");
+      if (gas < reserve + (native && sender === wallet ? raw : 0n)) throw new Error(`Your wallet needs at least ${GAS_ENVELOPE_STT} STT on ${SIDES[from].name} to send this. Top it up and try again.`);
       const privy = wallets.find((w) => w.address.toLowerCase() === wallet.toLowerCase());
       if (!privy) throw new Error("Your wallet isn't ready yet. Try again in a moment.");
-      const recipient = setup.account as Address;
-      const plan = createBridgeTransfer({ token: BridgeToken.USDso, from: ChainId.somniaShannon, to: ChainId.hidekiTestnet, amount: raw, recipient });
-      const [before] = await exchange().client.getBalances([{ token: hidekiToken }], recipient);
-      setRun({ stage: "switch", amount, recipient, before: (before ?? 0n).toString(), needsApproval: !!plan.approveStep, startedAt: Date.now() });
+
+      const plan = createBridgeTransfer({ token: ASSETS[asset].token, from: SIDES[from].chainId, to: SIDES[to].chainId, amount: raw, recipient });
+      // an STT transfer is paid out of the destination router's own balance: when it is short, the transfer would stall
+      if (plan.destination.requiresDestinationLiquidity) {
+        const liquidity = await bridgeClient(to).getBalance({ address: plan.destination.router });
+        if (liquidity < raw) throw new Error(`The bridge is short on STT on ${SIDES[to].name} right now, so this would stall. Nothing was sent; try a smaller amount later.`);
+      }
+      setRun({ stage: "switch", amount, asset, from, fromName: SIDES[from].name, toName: SIDES[to].name, recipient, needsApproval: !!plan.approveStep, startedAt: Date.now() });
 
       // each phase names itself in the error, so a node or wallet failure says where it happened
       const phase = async <T,>(stage: "switch" | "approve" | "send", name: string, work: () => Promise<T>): Promise<T> => {
@@ -207,31 +239,37 @@ export function BridgeScreen() {
           throw new Error(message);
         }
       };
-      // switchChain can resolve while the provider still reports the old chain, and the transaction is then refused.
-      // Ask the provider itself too, and wait until it really answers with Somnia Testnet before anything is signed.
-      const provider = await privy.getEthereumProvider();
-      await phase("switch", "Switching network", async () => {
-        const chainIdOf = async () => Number(await provider.request({ method: "eth_chainId" }));
-        await privy.switchChain(ChainId.somniaShannon);
-        if ((await chainIdOf()) !== ChainId.somniaShannon) {
-          await provider.request({ method: "wallet_switchEthereumChain", params: [{ chainId: numberToHex(ChainId.somniaShannon) }] });
-        }
-        for (let i = 0; i < 20 && (await chainIdOf()) !== ChainId.somniaShannon; i++) await new Promise((resolve) => setTimeout(resolve, 250));
-        const now = await chainIdOf();
-        if (now !== ChainId.somniaShannon) throw new Error(`Your wallet stayed on chain ${now}. Switch it to Somnia Testnet (${ChainId.somniaShannon}) and try again.`);
-      });
-      const walletClient = createWalletClient({ account: wallet, chain: somniaShannon, transport: custom(provider) });
+      const provider = await phase("switch", "Switching network", () => switchTo(privy, SIDES[from].chainId, SIDES[from].name));
+      const walletClient = createWalletClient({ account: wallet, chain: SIDES[from].chain, transport: custom(provider) });
+      const finish = (hash: Hex, receipt: TransactionReceipt) => {
+        if (receipt.status !== "success") throw new Error(`the transaction reverted on ${SIDES[from].name}, nothing moved`);
+        // no id means the receipt held no single Dispatch from this router; the card then just waits, and can be dismissed
+        update({ stage: "deliver", bridgeHash: hash, messageId: messageIdOf(receipt, originMailbox, origin.router) ?? undefined });
+      };
+
+      if (viaAccount) {
+        // the USDso/STT sits in the dreamDEX smart account: it sends the transfer, the wallet only signs and pays gas
+        const { client } = exchange();
+        const act = client.createExecutor({ smartAccount: account, inner: client.createExecutor({ walletClient }) });
+        const steps = [plan.approveStep, plan.bridgeStep].filter((s): s is NonNullable<typeof s> => !!s);
+        const done = await phase("send", "Bridging", () => act.execute(steps));
+        finish(done.hash, done.receipt);
+        return;
+      }
+
       // the approval has to land before the bridge call, or the transfer reverts
       for (const [stage, name, step] of [["approve", "Approving", plan.approveStep], ["send", "Bridging", plan.bridgeStep]] as const) {
         if (!step) continue;
         // gas and fees are fixed, like the SDK's own writes, so the wallet has nothing to estimate
         const hash = await phase(stage, name, () => walletClient.sendTransaction({ to: step.to, data: step.data, value: step.value, gas: BRIDGE_GAS, ...DEFAULT_FEES }));
-        await phase(stage, `${name} (confirming)`, async () => {
-          // a reverted transaction still comes back as a receipt; only "success" means the step happened
-          const receipt = await originClient.waitForTransactionReceipt({ hash });
-          if (receipt.status !== "success") throw new Error("the transaction reverted on Somnia Testnet, no USDso moved");
-        });
-        if (stage === "send") update({ stage: "deliver", bridgeHash: hash });
+        const receipt = await phase(stage, `${name} (confirming)`, () => bridgeClient(from).waitForTransactionReceipt({ hash }));
+        // a reverted transaction still comes back as a receipt; only "success" means the step happened
+        if (stage === "send") finish(hash, receipt);
+        else if (receipt.status !== "success") {
+          const message = `${name} (confirming): the transaction reverted on ${SIDES[from].name}, nothing moved`;
+          update({ stage: "failed", failedAt: stage, error: message });
+          throw new Error(message);
+        }
       }
     },
     onSuccess: () => {
@@ -250,10 +288,21 @@ export function BridgeScreen() {
   }
 
   const entered = Number(value) || 0;
-  const tooMuch = entered > Number(balance);
-  const explorer = somniaShannon.blockExplorers?.default.url;
+  const tooMuch = entered > Number(spendableText);
+  const runFrom = run ? SIDES[run.from] : null;
+  const explorer = runFrom?.chain.blockExplorers?.default.url;
   const busy = bridge.isPending || run?.stage === "deliver";
-  const label = bridge.isPending ? "Bridging…" : entered <= 0 ? "Enter an amount" : tooMuch ? "Not enough USDso" : "Bridge";
+  const label = bridge.isPending ? "Bridging…" : entered <= 0 ? "Enter an amount" : tooMuch ? `Not enough ${asset}` : "Bridge";
+  const pick = (next: BridgeAsset) => {
+    if (busy) return;
+    setAsset(next);
+    setValue("");
+  };
+  const flip = () => {
+    if (busy) return;
+    setFrom(to);
+    setValue("");
+  };
 
   return (
     <Screen title="Bridge">
@@ -265,13 +314,30 @@ export function BridgeScreen() {
           bridge.mutate(value.trim());
         }}
       >
+        <div className="flex gap-2" role="group" aria-label="Token to bridge">
+          {(["USDso", "STT"] as const).map((a) => (
+            <button
+              key={a}
+              type="button"
+              aria-pressed={asset === a}
+              disabled={busy}
+              onClick={() => pick(a)}
+              className={`rounded-full px-3 py-1 text-[13px] font-semibold ${asset === a ? "bg-white/20" : "bg-white/5 text-white/60"}`}
+            >
+              {a}
+            </button>
+          ))}
+        </div>
+
         <Side
           label="From"
-          network={SOMNIA}
+          side={from}
           trailing={
             <div className="flex items-center justify-between text-[12px] text-white/70">
-              <span>Balance {held.isPending ? "…" : amountOf(balance)}</span>
-              <button type="button" className="font-semibold text-cyan" onClick={() => setValue(balance)}>
+              <span>
+                {viaAccount ? "dreamDEX account" : "Balance"} {held.isPending ? "…" : amountOf(balance)}
+              </span>
+              <button type="button" className="font-semibold text-cyan" onClick={() => setValue(spendableText)}>
                 Max
               </button>
             </div>
@@ -282,37 +348,43 @@ export function BridgeScreen() {
             value={value}
             onChange={(event) => setValue(event.target.value.replace(/[^0-9.]/g, ""))}
             placeholder="0.0"
-            aria-label="Amount of USDso to bridge"
+            aria-label={`Amount of ${asset} to bridge`}
             className="min-w-0 flex-1 bg-transparent font-display text-[28px] font-bold tabular-nums outline-none placeholder:text-white/30"
           />
-          <TokenPill />
+          <TokenPill asset={asset} />
         </Side>
 
-        <div className="-my-3.5 z-10 flex justify-center" aria-hidden>
-          <span className="grid size-8 place-items-center rounded-full border-2 border-navy-950 bg-linear-to-b from-[#48bfff] to-[#128af6] text-white">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+        <div className="-my-3.5 z-10 flex justify-center">
+          <button
+            type="button"
+            onClick={flip}
+            disabled={busy}
+            aria-label="Switch direction"
+            className="grid size-8 place-items-center rounded-full border-2 border-navy-950 bg-linear-to-b from-[#48bfff] to-[#128af6] text-white disabled:opacity-60"
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
               <path d="M12 5v14M6 13l6 6 6-6" />
             </svg>
-          </span>
+          </button>
         </div>
 
         <Side
           label="To"
-          network={HIDEKI}
-          trailing={<span className="text-[12px] text-white/70">{setup.linked ? "Your dreamDEX account" : "Your wallet"} {short(setup.account)}</span>}
+          side={to}
+          trailing={<span className="text-[12px] text-white/70">{to === "hideki" ? (setup.linked ? "Your dreamDEX account" : "Your wallet") : "Your wallet"} {short(recipient ?? setup.account)}</span>}
         >
           <span className={`min-w-0 flex-1 truncate font-display text-[28px] font-bold tabular-nums ${entered > 0 ? "" : "text-white/30"}`}>{entered > 0 ? amountOf(value, 6) : "0.0"}</span>
-          <TokenPill />
+          <TokenPill asset={asset} />
         </Side>
 
         <Card className="flex flex-col gap-1 px-3 py-2 text-[12px] text-white/80">
-          <p className="flex justify-between"><span>Rate</span><span>1 USDso = 1 USDso</span></p>
+          <p className="flex justify-between"><span>Rate</span><span>1 {asset} = 1 {asset}</span></p>
           <p className="flex justify-between"><span>Bridge fee</span><span>Free</span></p>
           <p className="flex justify-between"><span>Arrives in</span><span>a few seconds</span></p>
-          <p className="flex justify-between"><span>Network gas</span><span>STT on Somnia Testnet</span></p>
+          <p className="flex justify-between"><span>Network gas</span><span>STT on {SIDES[from].name}</span></p>
         </Card>
 
-        {routeDown && <p className="rounded-xl bg-coral/15 px-3 py-2 text-[12px] leading-snug text-coral">{ROUTE_DOWN}</p>}
+        {routeDown && <p className="rounded-xl bg-coral/15 px-3 py-2 text-[12px] leading-snug text-coral">{routeDownText}</p>}
         <Button type="submit" disabled={busy || routeDown || entered <= 0 || tooMuch}>
           {label}
         </Button>

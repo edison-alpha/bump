@@ -10,23 +10,28 @@ export type BridgeRun = {
   /** The stage that was running when it failed. */
   failedAt?: Exclude<BridgeStage, "done" | "failed">;
   amount: string;
+  /** What is moving, and between which networks (display names). */
+  asset: string;
+  from: "somnia" | "hideki";
+  fromName: string;
+  toName: string;
   recipient: string;
-  /** The recipient's raw USDso on Hideki before the transfer; delivery is that plus the amount. */
-  before: string;
   needsApproval: boolean;
   bridgeHash?: string;
+  /** The Hyperlane message id, read from the origin receipt; delivery is the destination Mailbox saying it processed it. */
+  messageId?: string;
   startedAt: number;
   error?: string;
 };
 
 const ORDER: Exclude<BridgeStage, "failed">[] = ["switch", "approve", "send", "deliver", "done"];
 
-const LABELS: Record<string, { now: string; done: string }> = {
-  switch: { now: "Switching to Somnia Testnet", done: "On Somnia Testnet" },
-  approve: { now: "Approve USDso in your wallet", done: "USDso approved" },
-  send: { now: "Sending on Somnia Testnet", done: "Sent on Somnia Testnet" },
-  deliver: { now: "Arriving on Hideki", done: "Arrived on Hideki" },
-};
+const labels = (run: BridgeRun): Record<string, { now: string; done: string }> => ({
+  switch: { now: `Switching to ${run.fromName}`, done: `On ${run.fromName}` },
+  approve: { now: `Approve ${run.asset} in your wallet`, done: `${run.asset} approved` },
+  send: { now: `Sending on ${run.fromName}`, done: `Sent on ${run.fromName}` },
+  deliver: { now: `Arriving on ${run.toName}`, done: `Arrived on ${run.toName}` },
+});
 
 /** After this long without delivery the relayer is probably out of gas; the funds stay escrowed on the origin side. */
 export const SLOW_AFTER_MS = 90_000;
@@ -55,11 +60,12 @@ export function BridgeProgress({ run, explorerTx, now, onDismiss }: { run: Bridg
   const at = ORDER.indexOf(run.stage === "failed" ? (run.failedAt ?? "switch") : run.stage);
   const steps = (["switch", "approve", "send", "deliver"] as const).filter((s) => s !== "approve" || run.needsApproval);
   const slow = run.stage === "deliver" && now - run.startedAt > SLOW_AFTER_MS;
+  const text = labels(run);
 
   return (
     <Card className="flex flex-col gap-1.5 px-3 py-2.5" aria-live="polite">
       <p className="font-display text-[14px] font-bold">
-        {run.stage === "done" ? `Bridged ${run.amount} USDso` : failed ? "Bridge stopped" : `Bridging ${run.amount} USDso`}
+        {run.stage === "done" ? `Bridged ${run.amount} ${run.asset}` : failed ? "Bridge stopped" : `Bridging ${run.amount} ${run.asset}`}
       </p>
       <ul className="flex flex-col gap-1">
         {steps.map((s) => {
@@ -68,13 +74,13 @@ export function BridgeProgress({ run, explorerTx, now, onDismiss }: { run: Bridg
           return (
             <li key={s} className={`flex items-center gap-2 text-[13px] ${state === "todo" ? "text-white/50" : ""}`}>
               <Dot state={state} />
-              {state === "done" ? LABELS[s].done : LABELS[s].now}
+              {state === "done" ? text[s].done : text[s].now}
             </li>
           );
         })}
       </ul>
       {failed && run.error && <p className="text-[12px] leading-snug text-coral">{run.error}</p>}
-      {slow && <p className="text-[12px] leading-snug text-gold">Taking longer than usual. The relayer may be refilling; your USDso is held safely and arrives once it does.</p>}
+      {slow && <p className="text-[12px] leading-snug text-gold">Taking longer than usual. The relayer may be refilling; your {run.asset} is held safely and arrives once it does.</p>}
       <div className="flex gap-3 text-[12px] font-semibold">
         {explorerTx && (
           <a href={explorerTx} target="_blank" rel="noreferrer" className="text-cyan underline underline-offset-2">
