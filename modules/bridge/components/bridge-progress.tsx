@@ -67,12 +67,12 @@ export function BridgeProgress({ run, explorerTx, now, onDismiss }: { run: Bridg
       <p className="font-display text-[14px] font-bold">
         {run.stage === "done" ? `Bridged ${run.amount} ${run.asset}` : failed ? "Bridge stopped" : `Bridging ${run.amount} ${run.asset}`}
       </p>
-      <ul className="flex flex-col gap-1">
+      <ul className="flex items-start gap-1">
         {steps.map((s) => {
           const index = ORDER.indexOf(s);
           const state = failed && index === at ? "failed" : index < at || run.stage === "done" ? "done" : index === at ? "now" : "todo";
           return (
-            <li key={s} className={`flex items-center gap-2 text-[13px] ${state === "todo" ? "text-white/50" : ""}`}>
+            <li key={s} className={`flex min-w-0 flex-1 flex-col items-center gap-1 text-center text-[11px] leading-tight ${state === "todo" ? "text-white/50" : ""}`}>
               <Dot state={state} />
               {state === "done" ? text[s].done : text[s].now}
             </li>
