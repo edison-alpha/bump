@@ -11,9 +11,10 @@ import { Screen } from "@/components/shell/screen";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { shortError } from "@/lib/bump/dreamdex";
-import { ASSETS, bridgeClient, GAS_ENVELOPE_STT, hookAnswers, isDelivered, messageIdOf, otherSide, routeOf, SIDES, stepWouldSucceed, type BridgeAsset, type BridgeSide } from "@/lib/chain/bridge";
+import { ASSETS, bridgeClient, GAS_ENVELOPE_STT, hookAnswers, isDelivered, messageIdOf, otherSide, routeOf, SIDES, stepWouldSucceed, switchTo, type BridgeAsset, type BridgeSide } from "@/lib/chain/bridge";
 import { exchange } from "@/lib/chain/exchange";
 import { BridgeProgress, type BridgeRun } from "../components/bridge-progress";
+import { SwapPanel } from "../components/swap-panel";
 import { useTrade } from "@/modules/trade/trade-provider";
 
 /** The SDK's fixed gas ceiling; the wallet needs gas × max fee (0.6 STT) on hand, though unused gas is never charged. */
@@ -62,18 +63,6 @@ function Side({ label, side, trailing, children }: { label: string; side: Bridge
   );
 }
 
-/** Puts the wallet on `chainId`. switchChain can resolve while the provider still reports the old chain, so ask the provider too. */
-async function switchTo(privy: ConnectedWallet, chainId: number, name: string) {
-  const provider = await privy.getEthereumProvider();
-  const chainIdOf = async () => Number(await provider.request({ method: "eth_chainId" }));
-  await privy.switchChain(chainId);
-  if ((await chainIdOf()) !== chainId) await provider.request({ method: "wallet_switchEthereumChain", params: [{ chainId: numberToHex(chainId) }] });
-  for (let i = 0; i < 20 && (await chainIdOf()) !== chainId; i++) await new Promise((resolve) => setTimeout(resolve, 250));
-  const now = await chainIdOf();
-  if (now !== chainId) throw new Error(`Your wallet stayed on chain ${now}. Switch it to ${name} (${chainId}) and try again.`);
-  return provider;
-}
-
 /**
  * Move USDso or STT between Somnia Testnet and Hideki over Somnia's Hyperlane lane, the same bridge as the Somnia
  * explorer's. Going in, the funds land in the account that trades. Going out, they leave that account (the wallet itself,
@@ -88,6 +77,7 @@ export function BridgeScreen() {
   const [value, setValue] = useState("");
   const [asset, setAsset] = useState<BridgeAsset>("USDso");
   const [from, setFrom] = useState<BridgeSide>("somnia");
+  const [tab, setTab] = useState<"bridge" | "swap">("bridge");
   const to = otherSide(from);
 
   const wallet = setup?.address as Address | undefined;
@@ -311,7 +301,23 @@ export function BridgeScreen() {
 
   return (
     <Screen title="Bridge">
-      {run && <BridgeProgress run={run} now={now} explorerTx={run.bridgeHash && explorer ? `${explorer}/tx/${run.bridgeHash}` : undefined} onDismiss={() => update(null)} />}
+      <div className="flex gap-2" role="tablist" aria-label="Bridge or swap">
+        {(["bridge", "swap"] as const).map((t) => (
+          <button
+            key={t}
+            type="button"
+            role="tab"
+            aria-selected={tab === t}
+            onClick={() => setTab(t)}
+            className={`flex-1 rounded-full px-3 py-1.5 text-[14px] font-semibold capitalize ${tab === t ? "bg-white/20" : "bg-white/5 text-white/60"}`}
+          >
+            {t}
+          </button>
+        ))}
+      </div>
+      {tab === "swap" && <SwapPanel />}
+      {tab === "bridge" && run && <BridgeProgress run={run} now={now} explorerTx={run.bridgeHash && explorer ? `${explorer}/tx/${run.bridgeHash}` : undefined} onDismiss={() => update(null)} />}
+      {tab === "bridge" && (
       <form
         className="flex flex-col gap-2"
         onSubmit={(event) => {
@@ -394,6 +400,7 @@ export function BridgeScreen() {
         </Button>
         <p className="text-center text-[11px] leading-snug text-white/50">A test bridge with one validator. Testnet funds only.</p>
       </form>
+      )}
     </Screen>
   );
 }

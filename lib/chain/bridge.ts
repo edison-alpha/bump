@@ -1,5 +1,18 @@
 import { BridgeToken, ChainId, getBridgeNetwork, getBridgeToken, hidekiTestnet, somniaShannon } from "@somnia-chain/markets-sdk/chains";
-import { createPublicClient, decodeEventLog, http, parseAbi, type Address, type Hex, type PublicClient, type TransactionReceipt } from "viem";
+import type { ConnectedWallet } from "@privy-io/react-auth";
+import { createPublicClient, decodeEventLog, http, numberToHex, parseAbi, type Address, type Hex, type PublicClient, type TransactionReceipt } from "viem";
+
+/** Puts the wallet on `chainId`. switchChain can resolve while the provider still reports the old chain, so ask the provider too. */
+export async function switchTo(privy: ConnectedWallet, chainId: number, name: string) {
+  const provider = await privy.getEthereumProvider();
+  const chainIdOf = async () => Number(await provider.request({ method: "eth_chainId" }));
+  await privy.switchChain(chainId);
+  if ((await chainIdOf()) !== chainId) await provider.request({ method: "wallet_switchEthereumChain", params: [{ chainId: numberToHex(chainId) }] });
+  for (let i = 0; i < 20 && (await chainIdOf()) !== chainId; i++) await new Promise((resolve) => setTimeout(resolve, 250));
+  const now = await chainIdOf();
+  if (now !== chainId) throw new Error(`Your wallet stayed on chain ${now}. Switch it to ${name} (${chainId}) and try again.`);
+  return provider;
+}
 
 /** The two ends of Somnia's Hyperlane lane, and the tokens bump moves across it. */
 export type BridgeSide = "somnia" | "hideki";
