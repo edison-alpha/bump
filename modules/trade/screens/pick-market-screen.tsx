@@ -1,27 +1,59 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useDial, useSideKeys } from "@/components/console/console-provider";
+import { useConsole, useDial, useSideKeys } from "@/components/console/console-provider";
 import { Screen } from "@/components/shell/screen";
 import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { CoinIcon } from "@/components/ui/coin-icon";
+import { Icon } from "@/components/ui/icon";
 import { Mascot } from "@/components/ui/mascot";
 import { SpeechBubble } from "@/components/ui/speech-bubble";
 import { signedPct, usdPriceShort } from "@/lib/format";
 import { MarketRow } from "@/modules/market/components/market-row";
-import { useMarkets } from "@/modules/market/price-provider";
+import { cn } from "@/lib/cn";
+import { signedUsd } from "@/lib/format";
+import { useMarket, useMarkets } from "@/modules/market/price-provider";
 import { PriceNotice } from "@/modules/market/components/price-notice";
 import { Coach, KeyName } from "@/modules/progress/components/coach";
 import { useProgress } from "@/modules/progress/progress-provider";
+import { unrealizedPnl } from "../calc";
+import { SideChip } from "../components/trade-header";
 import { useTrade } from "../trade-provider";
-import type { Side } from "../types";
+import type { Position, Side } from "../types";
+
+/** The trade that is open, pinned above the pair list: coin, side and how it stands right now. Tap to open it. */
+function OpenPositionCard({ position }: { position: Position }) {
+  const market = useMarket(position.marketId);
+  const pnl = unrealizedPnl(position, position.entry, market.price);
+  return (
+    <Link href="/position" aria-label={`Open your ${market.name} trade`}>
+      <Card className="flex items-center gap-2.5 px-3 py-2">
+        <CoinIcon symbol={market.symbol} size={36} />
+        <div className="min-w-0 flex-1">
+          <p className="flex items-center gap-1.5 font-display text-[11px] font-bold tracking-[0.1em] text-white/70">YOUR OPEN TRADE</p>
+          <p className="flex items-center gap-1.5 font-display text-[16px] leading-tight font-bold">
+            {market.name} <SideChip side={position.side} /> <span className="text-[13px] text-white/75">{position.leverage}x</span>
+          </p>
+        </div>
+        <span className={cn("font-display text-[18px] font-bold tabular-nums", pnl >= 0 ? "text-mint" : "text-coral")}>{signedUsd(pnl)}</span>
+        <Icon name="chevron" size={20} className="shrink-0 text-white" />
+      </Card>
+    </Link>
+  );
+}
 
 export function PickMarketScreen() {
   const router = useRouter();
   const markets = useMarkets();
-  const { draft, patchDraft } = useTrade();
+  const { draft, patchDraft, position } = useTrade();
+  const { flash } = useConsole();
   const { tutorialActive } = useProgress();
 
   const choose = (side: Side) => {
+    // one trade at a time: the list is for looking around while it runs
+    if (position) return flash("Close your current trade first, then pick a direction.", "warn");
     patchDraft({ side });
     router.push("/trade/build");
   };
@@ -39,6 +71,7 @@ export function PickMarketScreen() {
 
   return (
     <Screen title="Pick a coin" className="[&>*]:shrink-0">
+      {position && <OpenPositionCard position={position} />}
       <PriceNotice market={selected} />
       <Coach step={1} points="sides">
         Think {selected.name} goes up? Press <KeyName tone="buy">BUY</KeyName>. Down? Press <KeyName tone="sell">SELL</KeyName>.
@@ -64,10 +97,10 @@ export function PickMarketScreen() {
 
       {/* the same choice as the SELL / BUY keys, for people who reach for the screen */}
       <div className="mt-auto grid grid-cols-2 gap-2">
-        <Button variant="short" size="lg" onClick={() => choose("short")}>
+        <Button variant="short" size="lg" disabled={!!position} onClick={() => choose("short")}>
           SELL · drops
         </Button>
-        <Button variant="long" size="lg" onClick={() => choose("long")}>
+        <Button variant="long" size="lg" disabled={!!position} onClick={() => choose("long")}>
           BUY · climbs
         </Button>
       </div>

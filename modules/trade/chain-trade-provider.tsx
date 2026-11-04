@@ -3,12 +3,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useWallets } from "@privy-io/react-auth";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { createPublicClient, createWalletClient, custom, erc20Abi, formatEther, formatUnits, parseUnits, type Address } from "viem";
+import { createPublicClient, createWalletClient, custom, erc20Abi, formatEther, parseUnits, type Address } from "viem";
 import { api, ApiError } from "@/lib/api/client";
 import { qk } from "@/lib/api/query";
 import type { CloseTradeResponse, OpenTradeResponse, Trade, TradesResponse } from "@/lib/api/types";
 import { closeToOrder, draftToOrder, HIDEKI, humanPrice, limitsToStops, maxLeverageX, OrderError, shortError } from "@/lib/bump/dreamdex";
 import { exchange } from "@/lib/chain/exchange";
+import { useChainPositions, type ChainPosition } from "@/lib/chain/positions";
 import { useChainMarkets } from "@/lib/chain/markets";
 import { round2, usd } from "@/lib/format";
 import { sfx } from "@/lib/sound";
@@ -116,43 +117,26 @@ export function ChainTradeProvider({ address, tradingAccount, children }: { addr
   // record is gone) holds margin all the same, and the player has to be able to see it, close it and protect it.
   const [focusPool, setFocusPool] = useState<string | null>(null);
   const scanning = !open && trades.isSuccess && !!markets;
-  const externals = useQuery({
-    queryKey: ["bump", "chain", "external", account],
-    enabled: scanning,
-    refetchInterval: 10_000,
-    queryFn: async (): Promise<ExternalPosition[]> => {
-      const { client } = exchange();
-      const found = await Promise.all(
-        Object.entries(markets ?? {}).map(async ([marketId, m]): Promise<ExternalPosition | null> => {
-          try {
-            const p = await client.getPerpPosition({ marginBank: m.marginBank as Address, account, pool: m.poolAddress });
-            if (p.size === 0n) return null;
-            const long = p.size > 0n;
-            const entry = humanPrice(p.avgEntryPrice, m);
-            const notional = Number(formatUnits(long ? p.size : -p.size, m.baseDecimals)) * entry;
-            const stops = m.stopRegistry ? await client.listPerpStopOrders({ account, pool: m.poolAddress, status: ["PENDING"] }).catch(() => []) : [];
-            // a stop that fires above is the target of a long and the stop of a short; below is the reverse
-            const target = stops.find((s) => (s.triggerOperator === 0) === long);
-            const stop = stops.find((s) => (s.triggerOperator === 0) !== long);
-            const pct = (s?: (typeof stops)[number]) => (s && entry > 0 ? Math.abs(humanPrice(BigInt(s.triggerPrice), m) / entry - 1) * 100 : 0);
-            const lev = (await client.getPerpLeverage({ marginBank: m.marginBank as Address, account, pool: m.poolAddress }).catch(() => null)) as unknown as { positionLeverageBps?: bigint | number } | null;
+  const chainPositions = useChainPositions(account, scanning);
+  const externals = useMemo<ExternalPosition[]>(
+    () =>
+      (chainPositions.data ?? [])
+        .filter((p): p is ChainPosition & { marketId: string } => !!p.marketId && !!markets?.[p.marketId])
+        .map((p) => {
+          const target = p.stops.find((s) => s.kind === "TP");
+          const stop = p.stops.find((s) => s.kind === "SL");
+          const pct = (s?: { trigger: number }) => (s && p.entry > 0 ? Math.abs(s.trigger / p.entry - 1) * 100 : 0);
+          return {
+            pool: p.pool,
+            marketId: p.marketId,
+            unprotected: p.stops.length === 0,
             // the leverage the account actually runs this position at, so the stake and the profit on it read true
-            const leverage = Math.max(1, Math.round(Number(lev?.positionLeverageBps ?? 0) / 10_000));
-            return {
-              pool: m.poolAddress,
-              marketId,
-              unprotected: !target && !stop,
-              position: { id: `chain:${m.poolAddress}`, marketId, side: long ? "long" : "short", entry, margin: notional / leverage, leverage, targetPct: pct(target), stopPct: pct(stop), openedAt: Date.now() },
-            };
-          } catch {
-            return null;
-          }
+            position: { id: `chain:${p.pool}`, marketId: p.marketId, side: p.side, entry: p.entry, margin: (p.size * p.entry) / p.leverage, leverage: p.leverage, targetPct: pct(target), stopPct: pct(stop), openedAt: Date.now() },
+          };
         }),
-      );
-      return found.filter((e): e is ExternalPosition => e !== null).sort((a, b) => b.position.margin - a.position.margin);
-    },
-  });
-  const external = !open ? ((externals.data ?? []).find((e) => e.pool.toLowerCase() === focusPool?.toLowerCase()) ?? externals.data?.[0] ?? null) : null;
+    [chainPositions.data, markets],
+  );
+  const external = !open ? (externals.find((e) => e.pool.toLowerCase() === focusPool?.toLowerCase()) ?? externals[0] ?? null) : null;
   const position = useMemo(() => (open ? toPosition(open) : (external?.position ?? null)), [open, external]);
   const focusPosition = useCallback((pool: string) => setFocusPool(pool), []);
   const history = useMemo(() => (trades.data?.history ?? []).map(toClosed), [trades.data?.history]);
@@ -743,7 +727,7 @@ export function ChainTradeProvider({ address, tradingAccount, children }: { addr
       draft,
       position,
       history,
-      ready: !trades.isPending && !(scanning && externals.isPending),
+      ready: !trades.isPending && !(scanning && chainPositions.isPending),
       balance,
       available,
       broke,

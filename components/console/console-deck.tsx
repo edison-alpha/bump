@@ -5,7 +5,6 @@ import { useEffect } from "react";
 import { cn } from "@/lib/cn";
 import { PoweredBy } from "@/components/shell/powered-by";
 import { useSession } from "@/modules/session/session-provider";
-import { useTrade } from "@/modules/trade/trade-provider";
 import { ActionKey } from "./action-key";
 import { useConsole } from "./console-provider";
 import { Keycap } from "./keycap";
@@ -60,7 +59,6 @@ export function ConsoleDeck() {
   const pathname = usePathname();
   const { session } = useSession();
   const { action, sideKeys, coachKey } = useConsole();
-  const { position } = useTrade();
   const signedIn = session.status !== "signed-out";
   const next = action?.current ?? null;
   const sides = sideKeys?.current ?? null;
@@ -170,8 +168,7 @@ export function ConsoleDeck() {
                   tone={active ? "pillOn" : "pill"}
                   aria-current={active ? "page" : undefined}
                   disabled={!signedIn}
-                  // with a trade running, TRADE goes straight to it instead of the market list
-                  onClick={() => router.push(href === "/markets" && position ? "/position" : href)}
+                  onClick={() => router.push(href)}
                   className="h-8 w-full rounded-full pl-4 text-[11px] tracking-[0.06em] uppercase"
                 >
                   <span
