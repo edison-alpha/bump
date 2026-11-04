@@ -32,28 +32,41 @@ export function useDreamdexConnect() {
   const { linkWallet } = usePrivy();
   const { wallets } = useWallets();
 
-  /** The player's own wallet (MetaMask, …): any connected wallet that is not the one bump trades with. */
-  const external = useMemo<ConnectedWallet | null>(
-    () => wallets.find((w) => w.walletClientType !== "privy" && !same(w.address, session.address)) ?? null,
-    [wallets, session.address],
-  );
+  /**
+   * The player's own wallet (MetaMask, …). Either a second wallet linked next to the bump one, or, when they signed in
+   * with that wallet, the bump wallet itself: then there is nothing to link and nothing to add as an owner.
+   */
+  const external = useMemo<ConnectedWallet | null>(() => {
+    const other = wallets.find((w) => w.walletClientType !== "privy" && !same(w.address, session.address));
+    if (other) return other;
+    return wallets.find((w) => w.walletClientType !== "privy" && same(w.address, session.address)) ?? null;
+  }, [wallets, session.address]);
 
   const lookup = useMutation({
     mutationFn: async (): Promise<DreamdexAccount[]> => {
       if (!external) throw new Error("Connect your dreamDEX wallet first.");
       const { accounts } = exchange().client;
-      const found = await accounts.listControlledAccounts(external.address as Address);
-      return Promise.all(
-        found.map(async (a) => {
-          const owners = await accounts.ownersOf(a.address);
-          return {
-            address: a.address as string,
-            threshold: Number(owners.threshold),
-            ownsIt: owners.owners.some((o) => same(o.address, session.address)),
-            ready: owners.owners.some((o) => same(o.address, external.address)),
-          };
+      const owner = external.address as Address;
+      // the indexer can lag behind a network the account was just added on, so Wallet 1 is also read from the chain
+      const listed = (await accounts.listControlledAccounts(owner)).map((a) => a.address as string);
+      const wallet1 = accounts.addressOf(owner, 0n) as string;
+      const addresses = [...new Set([...listed, wallet1])];
+      const rows = await Promise.all(
+        addresses.map(async (address): Promise<DreamdexAccount | null> => {
+          try {
+            const owners = await accounts.ownersOf(address as Address);
+            return {
+              address,
+              threshold: Number(owners.threshold),
+              ownsIt: owners.owners.some((o) => same(o.address, session.address)),
+              ready: owners.owners.some((o) => same(o.address, owner)),
+            };
+          } catch {
+            return null; // not deployed on this network
+          }
         }),
       );
+      return rows.filter((r): r is DreamdexAccount => r !== null);
     },
   });
 
@@ -63,6 +76,7 @@ export function useDreamdexConnect() {
       if (!account.ownsIt) {
         if (!external) throw new Error("Connect your dreamDEX wallet first.");
         if (!account.ready) throw new Error("Your dreamDEX wallet isn't an owner of that account.");
+        if (same(external.address, session.address)) throw new Error("Your wallet isn't an owner of that account yet.");
         const { client } = exchange();
         await external.switchChain(HIDEKI.chainId);
         const provider = await external.getEthereumProvider();

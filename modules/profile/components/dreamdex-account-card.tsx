@@ -99,7 +99,7 @@ export function DreamdexAccountCard() {
 
       {external && (
         <>
-          <p className="text-[12px] text-white/80">dreamDEX wallet: {short(external.address)}</p>
+          <p className="text-[12px] text-white/80">dreamDEX wallet: {short(external.address)}{external.address.toLowerCase() === session.address.toLowerCase() ? " (the wallet you signed in with)" : ""}</p>
           {lookup.isPending && <p className="text-[12px] text-white/80">Looking for your accounts…</p>}
           {lookup.isError && (
             <Button size="sm" variant="outline" className="w-auto self-start" onClick={() => findAccounts()}>
@@ -109,10 +109,13 @@ export function DreamdexAccountCard() {
           {lookup.data && lookup.data.length === 0 && <p className="text-[12px] text-white/80">This wallet doesn&apos;t control a dreamDEX account yet. Open dreamDEX with it once, then try again.</p>}
           {lookup.data?.map((account) => (
             <div key={account.address} className="flex flex-col gap-0.5">
-              <Button size="sm" variant="outline" className="w-auto self-start" disabled={busy || account.threshold !== 1} onClick={() => pick(account)}>
+              <Button size="sm" variant="outline" className="w-auto self-start" disabled={busy || account.threshold !== 1 || (!account.ready && !account.ownsIt)} onClick={() => pick(account)}>
                 {connect.isPending && connect.variables?.address === account.address ? "Approve in your wallet…" : `Use ${short(account.address)}`}
               </Button>
               {account.threshold !== 1 && <p className="text-[12px] text-white/80">Needs {account.threshold} signatures, so bump can&apos;t trade through it.</p>}
+              {account.threshold === 1 && !account.ready && !account.ownsIt && (
+                <p className="text-[12px] text-white/80">This wallet isn&apos;t an owner of {short(account.address)} on Hideki yet. In dreamDEX, open the wallet, tap Manage and add it on this network, then try again.</p>
+              )}
             </div>
           ))}
         </>
