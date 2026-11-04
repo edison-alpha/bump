@@ -4,7 +4,6 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useConsole, useDial, useSideKeys } from "@/components/console/console-provider";
 import { Screen } from "@/components/shell/screen";
-import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { CoinIcon } from "@/components/ui/coin-icon";
 import { Icon } from "@/components/ui/icon";
@@ -94,16 +93,6 @@ export function PickMarketScreen() {
           </SpeechBubble>
         </div>
       )}
-
-      {/* the same choice as the SELL / BUY keys, for people who reach for the screen */}
-      <div className="mt-auto grid grid-cols-2 gap-2">
-        <Button variant="short" size="lg" disabled={!!position} onClick={() => choose("short")}>
-          SELL · drops
-        </Button>
-        <Button variant="long" size="lg" disabled={!!position} onClick={() => choose("long")}>
-          BUY · climbs
-        </Button>
-      </div>
     </Screen>
   );
 }

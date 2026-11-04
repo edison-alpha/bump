@@ -3,9 +3,8 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { formatUnits } from "viem";
-import { useDial, useSideKeys } from "@/components/console/console-provider";
+import { useConsole, useDial, useSideKeys } from "@/components/console/console-provider";
 import { Screen } from "@/components/shell/screen";
-import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { CoinIcon } from "@/components/ui/coin-icon";
 import { Segmented } from "@/components/ui/segmented";
@@ -39,7 +38,8 @@ const POINTS = 60;
 /** One market in full: price, a chart you can zoom, and the exchange's own limits for it. */
 export function MarketDetailScreen({ marketId }: { marketId: string }) {
   const router = useRouter();
-  const { patchDraft } = useTrade();
+  const { patchDraft, position } = useTrade();
+  const { flash } = useConsole();
   const market = useMarket(marketId);
   const { data: rows } = useChainMarkets();
   const row = rows?.[market.id];
@@ -53,7 +53,9 @@ export function MarketDetailScreen({ marketId }: { marketId: string }) {
   const move = series.length > 1 ? ((series[series.length - 1] as number) / (series[0] as number) - 1) * 100 : NaN;
 
   const choose = (side: Side) => {
-    if (market.priceStatus !== "live") return;
+    // the keys are the only way to pick a direction, so they say why when they cannot
+    if (position) return flash("Close your current trade first, then pick a direction.", "warn");
+    if (market.priceStatus !== "live") return flash("Waiting for a live dreamDEX price.", "warn");
     patchDraft({ marketId: market.id, side });
     router.push("/trade/build");
   };
@@ -102,15 +104,6 @@ export function MarketDetailScreen({ marketId }: { marketId: string }) {
         {row && <StatRow label="Price step" value={usdPrice(humanPrice(row.tickSize, row))} />}
         {row && <StatRow label="Smallest order" value={`${Number(formatUnits(BigInt(row.minQuantity), row.baseDecimals))} ${market.symbol}`} />}
       </Card>
-
-      <div className="mt-auto grid grid-cols-2 gap-2">
-        <Button variant="short" size="lg" disabled={market.priceStatus !== "live"} onClick={() => choose("short")}>
-          SELL · drops
-        </Button>
-        <Button variant="long" size="lg" disabled={market.priceStatus !== "live"} onClick={() => choose("long")}>
-          BUY · climbs
-        </Button>
-      </div>
     </Screen>
   );
 }
