@@ -47,13 +47,12 @@ function Box({ label, trailing, children }: { label: string; trailing?: ReactNod
  * the live book: the chain fills what the book has within a 1% limit and returns the rest. The tokens arrive in the
  * wallet that signs the swap.
  */
-export function SwapPanel() {
+export function SwapPanel({ chain }: { chain: BridgeSide }) {
   const { setup } = useTrade();
   const { wallets } = useWallets();
   const { flash } = useConsole();
   const queryClient = useQueryClient();
   const [value, setValue] = useState("");
-  const [chain, setChain] = useState<BridgeSide>("hideki");
   const [symbol, setSymbol] = useState<string | null>(null);
   const [side, setSide] = useState<"sell" | "buy">("sell");
 
@@ -162,13 +161,6 @@ export function SwapPanel() {
           : !enough
             ? "Not enough liquidity"
             : "Swap";
-  const pickChain = (next: BridgeSide) => {
-    if (swap.isPending || next === chain) return;
-    setChain(next);
-    setSymbol(null);
-    setSide("sell");
-    setValue("");
-  };
   const pickPair = (next: string) => {
     if (swap.isPending) return;
     setSymbol(next);
@@ -188,20 +180,6 @@ export function SwapPanel() {
         swap.mutate();
       }}
     >
-      <div className="flex gap-2" role="group" aria-label="Network">
-        {(["somnia", "hideki"] as const).map((c) => (
-          <button
-            key={c}
-            type="button"
-            aria-pressed={chain === c}
-            disabled={swap.isPending}
-            onClick={() => pickChain(c)}
-            className={`flex-1 rounded-full px-3 py-1 text-[13px] font-semibold ${chain === c ? "bg-white/20" : "bg-white/5 text-white/60"}`}
-          >
-            {SIDES[c].name}
-          </button>
-        ))}
-      </div>
       <div className="flex flex-wrap gap-2" role="group" aria-label="Pair">
         {pairs.data?.map((p) => (
           <button

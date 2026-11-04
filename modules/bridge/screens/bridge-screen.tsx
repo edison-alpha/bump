@@ -21,6 +21,8 @@ import { useTrade } from "@/modules/trade/trade-provider";
 
 const BRIDGE_GAS = TX_GAS;
 
+const TITLES = { bridge: "Bridge", swap: "Swap", send: "Send", withdraw: "Withdraw" } as const;
+
 const short = (address: string) => `${address.slice(0, 6)}…${address.slice(-4)}`;
 const amountOf = (value: string, max = 4) => Number(value).toLocaleString("en-US", { maximumFractionDigits: max });
 
@@ -48,6 +50,25 @@ function TokenPill({ asset }: { asset: BridgeAsset }) {
       <Logo src={ASSETS[asset].logo} size={26} />
       {asset}
     </span>
+  );
+}
+
+/** Which network Swap and Send work on, as two small chips for the top-right corner of the header. */
+function ChainSwitch({ value, onChange }: { value: BridgeSide; onChange: (side: BridgeSide) => void }) {
+  return (
+    <div role="group" aria-label="Network" className="flex gap-0.5 rounded-full bg-white/10 p-0.5">
+      {(["somnia", "hideki"] as const).map((c) => (
+        <button
+          key={c}
+          type="button"
+          aria-pressed={value === c}
+          onClick={() => onChange(c)}
+          className={`rounded-full px-2 py-1 text-[11px] leading-none font-semibold ${value === c ? "bg-white/25 text-white" : "text-white/60"}`}
+        >
+          {SIDES[c].short}
+        </button>
+      ))}
+    </div>
   );
 }
 
@@ -79,6 +100,8 @@ export function BridgeScreen() {
   const [asset, setAsset] = useState<BridgeAsset>("USDso");
   const [from, setFrom] = useState<BridgeSide>("somnia");
   const [tab, setTab] = useState<"bridge" | "swap" | "send" | "withdraw">("bridge");
+  /** Which network Swap and Send work on; the switch sits in the header. */
+  const [chain, setChain] = useState<BridgeSide>("hideki");
   const to = otherSide(from);
 
   const wallet = setup?.address as Address | undefined;
@@ -301,7 +324,7 @@ export function BridgeScreen() {
   };
 
   return (
-    <Screen title="Bridge">
+    <Screen title={TITLES[tab]} right={tab === "swap" || tab === "send" ? <ChainSwitch value={chain} onChange={setChain} /> : undefined}>
       <div className="flex gap-2" role="tablist" aria-label="Bridge, swap, send or withdraw">
         {(["bridge", "swap", "send", "withdraw"] as const).map((t) => (
           <button
@@ -316,8 +339,8 @@ export function BridgeScreen() {
           </button>
         ))}
       </div>
-      {tab === "swap" && <SwapPanel />}
-      {tab === "send" && <SendPanel />}
+      {tab === "swap" && <SwapPanel key={chain} chain={chain} />}
+      {tab === "send" && <SendPanel key={chain} chain={chain} />}
       {tab === "withdraw" && <WithdrawPanel />}
       {tab === "bridge" && run && <BridgeProgress run={run} now={now} explorerTx={run.bridgeHash && explorer ? `${explorer}/tx/${run.bridgeHash}` : undefined} onDismiss={() => update(null)} />}
       {tab === "bridge" && (

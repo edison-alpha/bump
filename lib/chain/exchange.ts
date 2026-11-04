@@ -3,6 +3,13 @@ import { somniaShannon } from "@somnia-chain/markets-sdk/chains";
 import { HIDEKI } from "@/lib/bump/dreamdex";
 import type { BridgeSide } from "@/lib/chain/bridge";
 
+/**
+ * The registry the perp pools check for operator grants. The SDK's Hideki address set does not carry it, and without it
+ * every TP/SL placement fails before anything is sent (NotConfiguredError: operatorPermissionsRegistry). Read off the
+ * chain: for every owner whose stop the pool accepts, this registry reports the stop registry as globally approved.
+ */
+const OPERATOR_PERMISSIONS_REGISTRY = "0x6B2FbfeD328FF5F20C0BE7D3C3437613aFFE8D3a" as const;
+
 let instance: SomniaMarkets | null = null;
 let somnia: SomniaMarkets | null = null;
 
@@ -13,7 +20,7 @@ let somnia: SomniaMarkets | null = null;
  */
 export function exchange(): SomniaMarkets {
   if (typeof window === "undefined") throw new Error("The dreamDEX exchange only runs in the browser.");
-  instance ??= new SomniaMarkets({ indexerUrl: HIDEKI.indexerUrl, chain: HIDEKI.chain, addresses: HIDEKI.addresses });
+  instance ??= new SomniaMarkets({ indexerUrl: HIDEKI.indexerUrl, chain: HIDEKI.chain, addresses: { ...HIDEKI.addresses, operatorPermissionsRegistry: OPERATOR_PERMISSIONS_REGISTRY } });
   return instance;
 }
 

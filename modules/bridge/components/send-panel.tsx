@@ -23,12 +23,11 @@ const short = (address: string) => `${address.slice(0, 6)}…${address.slice(-4)
  * Send any token the chain lists (the native coin, USDso, WBTC, WETH) to any address, from the wallet or, when the
  * player trades through a dreamDEX account, from that account. The wallet signs and pays gas either way.
  */
-export function SendPanel() {
+export function SendPanel({ chain }: { chain: BridgeSide }) {
   const { setup } = useTrade();
   const { flash } = useConsole();
   const queryClient = useQueryClient();
   const send = useSender();
-  const [chain, setChain] = useState<BridgeSide>("hideki");
   const [symbol, setSymbol] = useState("STT");
   const [fromAccount, setFromAccount] = useState(false);
   const [to, setTo] = useState("");
@@ -111,26 +110,6 @@ export function SendPanel() {
         mutation.mutate();
       }}
     >
-      <div className="flex gap-2" role="group" aria-label="Network">
-        {(["somnia", "hideki"] as const).map((c) => (
-          <button
-            key={c}
-            type="button"
-            aria-pressed={chain === c}
-            disabled={mutation.isPending}
-            onClick={() => {
-              setChain(c);
-              setSymbol("STT");
-              setFromAccount(false);
-              setValue("");
-            }}
-            className={`flex-1 ${chip(chain === c)}`}
-          >
-            {SIDES[c].name}
-          </button>
-        ))}
-      </div>
-
       {canUseAccount && (
         <div className="flex gap-2" role="group" aria-label="Send from">
           <button type="button" aria-pressed={!fromAcct} disabled={mutation.isPending} onClick={() => setFromAccount(false)} className={`flex-1 ${chip(!fromAcct)}`}>

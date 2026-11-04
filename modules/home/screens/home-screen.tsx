@@ -89,6 +89,17 @@ export function HomeScreen() {
       </Card>
 
       <ChargeUpCard />
+
+      {mode === "chain" && (
+        <Link href="/bridge" className="glass flex min-h-12 items-center gap-3 rounded-[12px] px-3 py-1.5">
+          <Icon name="bars" size={24} className="text-white" />
+          <span className="min-w-0 flex-1">
+            <span className="block font-display text-[16px] leading-tight font-bold">DEX</span>
+            <span className="block truncate text-[12px] text-white/75">Swap, bridge, send &amp; withdraw</span>
+          </span>
+          <Icon name="chevron" size={20} className="text-white" />
+        </Link>
+      )}
       <PriceNotice market={position ? markets.find((market) => market.id === position.marketId) ?? hot : hot} />
 
       {position ? (
