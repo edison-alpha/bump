@@ -11,7 +11,7 @@ import { Screen } from "@/components/shell/screen";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { shortError } from "@/lib/bump/dreamdex";
-import { ASSETS, bridgeClient, GAS_ENVELOPE_STT, isDelivered, messageIdOf, otherSide, routeIsUp, routeOf, SIDES, type BridgeAsset, type BridgeSide } from "@/lib/chain/bridge";
+import { ASSETS, bridgeClient, GAS_ENVELOPE_STT, isDelivered, messageIdOf, otherSide, routeOf, SIDES, type BridgeAsset, type BridgeSide } from "@/lib/chain/bridge";
 import { exchange } from "@/lib/chain/exchange";
 import { BridgeProgress, type BridgeRun } from "../components/bridge-progress";
 import { useTrade } from "@/modules/trade/trade-provider";
@@ -125,19 +125,6 @@ export function BridgeScreen() {
   const spendable = native && sender === wallet ? (rawBalance > reserve ? rawBalance - reserve : 0n) : rawBalance;
   const spendableText = formatUnits(spendable, decimals);
 
-  // The router's gas hook decides whether transferRemote can run at all. When it reverts, so does every bridge, and the
-  // approval would be gas spent for nothing. Asking it is free.
-  const route = useQuery({
-    queryKey: ["bump", "bridge", "route", origin?.router, from],
-    enabled: !!origin,
-    refetchInterval: 60_000,
-    queryFn: () => routeIsUp(from, origin?.router as Address),
-  });
-  const routeDown = route.data === false;
-  const routeDownText =
-    `The ${asset} route from ${SIDES[from].short} is down on Somnia's side right now (its gas hook reverts). Nothing was sent, and your ${asset} is safe.` +
-    (asset === "USDso" && from === "somnia" ? " STT still bridges, and USDso from Hideki to Somnia still works. To trade, claim the free USDso voucher from Home." : "");
-
   // the bridge in flight, kept in localStorage once it is sent so a reload keeps watching for the delivery
   const storeKey = `bump:bridge:${wallet}`;
   const [run, setRun] = useState<BridgeRun | null>(null);
@@ -209,7 +196,6 @@ export function BridgeScreen() {
   const bridge = useMutation({
     mutationFn: async (amount: string) => {
       if (!setup || !wallet || !account || !recipient || !origin || !destination || !originMailbox) throw new Error("Your wallet isn't ready yet.");
-      if (routeDown) throw new Error(routeDownText);
       const raw = parseUnits(amount, decimals);
       if (raw <= 0n) throw new Error("Enter an amount to bridge.");
       if (raw > rawBalance) throw new Error(`${from === "hideki" && viaAccount ? "Your dreamDEX account holds" : "Your wallet holds"} ${amountOf(balance)} ${asset} on ${SIDES[from].name}.`);
@@ -386,8 +372,7 @@ export function BridgeScreen() {
           <p className="flex justify-between"><span>Network gas</span><span>STT on {SIDES[from].name}</span></p>
         </Card>
 
-        {routeDown && <p className="rounded-xl bg-coral/15 px-3 py-2 text-[12px] leading-snug text-coral">{routeDownText}</p>}
-        <Button type="submit" disabled={busy || routeDown || entered <= 0 || tooMuch}>
+        <Button type="submit" disabled={busy || entered <= 0 || tooMuch}>
           {label}
         </Button>
         <p className="text-center text-[11px] leading-snug text-white/50">A test bridge with one validator. Testnet funds only.</p>

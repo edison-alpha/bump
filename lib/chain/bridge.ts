@@ -65,15 +65,3 @@ export function messageIdOf(receipt: TransactionReceipt, mailbox: Address, route
 export async function isDelivered(side: BridgeSide, mailbox: Address, messageId: Hex): Promise<boolean> {
   return bridgeClient(side).readContract({ address: mailbox, abi: mailboxAbi, functionName: "delivered", args: [messageId] });
 }
-
-const routerAbi = parseAbi(["function quoteGasPayment(uint32 destinationDomain) view returns (uint256)"]);
-
-/** The router's gas hook decides whether transferRemote can run at all; when it reverts, so does every transfer. */
-export async function routeIsUp(side: BridgeSide, router: Address): Promise<boolean> {
-  try {
-    await bridgeClient(side).readContract({ address: router, abi: routerAbi, functionName: "quoteGasPayment", args: [SIDES[otherSide(side)].chainId] });
-    return true;
-  } catch {
-    return false;
-  }
-}
