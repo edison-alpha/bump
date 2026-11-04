@@ -61,6 +61,32 @@ export function messageIdOf(receipt: TransactionReceipt, mailbox: Address, route
   return null;
 }
 
+const routerAbi = parseAbi(["function quoteGasPayment(uint32 destinationDomain) view returns (uint256)"]);
+
+/**
+ * Whether the router's dispatch hook answers. `transferRemote` asks the hook for a quote and then runs its post-dispatch;
+ * a router whose hook is not a real Hyperlane hook reverts on both, so every transfer through it fails after the
+ * tokens were pulled (the revert undoes that, but the gas is spent). The quote is a free read.
+ */
+export async function hookAnswers(side: BridgeSide, router: Address): Promise<boolean> {
+  try {
+    await bridgeClient(side).readContract({ address: router, abi: routerAbi, functionName: "quoteGasPayment", args: [SIDES[otherSide(side)].chainId] });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** Dry-runs a bridge step as `from` (eth_call, nothing is sent): false when the chain would revert it. */
+export async function stepWouldSucceed(side: BridgeSide, from: Address, step: { to: Address; data: Hex; value: bigint }, gas: bigint): Promise<boolean> {
+  try {
+    await bridgeClient(side).call({ account: from, to: step.to, data: step.data, value: step.value, gas });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 /** True once the destination Mailbox has processed that message. A view, so it is safe to ask as often as needed. */
 export async function isDelivered(side: BridgeSide, mailbox: Address, messageId: Hex): Promise<boolean> {
   return bridgeClient(side).readContract({ address: mailbox, abi: mailboxAbi, functionName: "delivered", args: [messageId] });

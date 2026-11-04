@@ -11,7 +11,7 @@ import { Screen } from "@/components/shell/screen";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { shortError } from "@/lib/bump/dreamdex";
-import { ASSETS, bridgeClient, GAS_ENVELOPE_STT, isDelivered, messageIdOf, otherSide, routeOf, SIDES, type BridgeAsset, type BridgeSide } from "@/lib/chain/bridge";
+import { ASSETS, bridgeClient, GAS_ENVELOPE_STT, hookAnswers, isDelivered, messageIdOf, otherSide, routeOf, SIDES, stepWouldSucceed, type BridgeAsset, type BridgeSide } from "@/lib/chain/bridge";
 import { exchange } from "@/lib/chain/exchange";
 import { BridgeProgress, type BridgeRun } from "../components/bridge-progress";
 import { useTrade } from "@/modules/trade/trade-provider";
@@ -211,6 +211,14 @@ export function BridgeScreen() {
         const liquidity = await bridgeClient(to).getBalance({ address: plan.destination.router });
         if (liquidity < raw) throw new Error(`The bridge is short on STT on ${SIDES[to].name} right now, so this would stall. Nothing was sent; try a smaller amount later.`);
       }
+      // a router whose hook isn't a real Hyperlane hook reverts every transfer after pulling the tokens: the gas is spent for
+      // nothing. Both checks below are free reads, and run before anything is signed.
+      if (!(await hookAnswers(from, origin.router))) {
+        throw new Error(`The ${asset} bridge from ${SIDES[from].short} is misconfigured on Somnia's side right now: its dispatch hook isn't a valid Hyperlane hook, so every transfer reverts. Nothing was sent and your ${asset} is safe.`);
+      }
+      if (!plan.approveStep && !(await stepWouldSucceed(from, sender as Address, plan.bridgeStep, BRIDGE_GAS))) {
+        throw new Error(`The chain would reject this transfer. Nothing was sent and your ${asset} is safe.`);
+      }
       setRun({ stage: "switch", amount, asset, from, fromName: SIDES[from].name, toName: SIDES[to].name, recipient, needsApproval: !!plan.approveStep, startedAt: Date.now() });
 
       // each phase names itself in the error, so a node or wallet failure says where it happened
@@ -240,6 +248,9 @@ export function BridgeScreen() {
         const { client } = exchange();
         const act = client.createExecutor({ smartAccount: account, inner: client.createExecutor({ walletClient }) });
         const steps = [plan.approveStep, plan.bridgeStep].filter((s): s is NonNullable<typeof s> => !!s);
+        await phase("send", "Checking", async () => {
+          if (!(await stepWouldSucceed(from, account, plan.bridgeStep, BRIDGE_GAS))) throw new Error("the chain would reject this transfer, so nothing was sent");
+        });
         const done = await phase("send", "Bridging", () => act.execute(steps));
         finish(done.hash, done.receipt);
         return;
@@ -248,6 +259,12 @@ export function BridgeScreen() {
       // the approval has to land before the bridge call, or the transfer reverts
       for (const [stage, name, step] of [["approve", "Approving", plan.approveStep], ["send", "Bridging", plan.bridgeStep]] as const) {
         if (!step) continue;
+        // once the approval has landed, dry-run the bridge call itself: a revert costs gas, a dry run costs nothing
+        if (stage === "send") {
+          await phase("send", "Checking", async () => {
+            if (!(await stepWouldSucceed(from, wallet, step, BRIDGE_GAS))) throw new Error("the chain would reject this transfer, so nothing was sent");
+          });
+        }
         // gas and fees are fixed, like the SDK's own writes, so the wallet has nothing to estimate
         const hash = await phase(stage, name, () => walletClient.sendTransaction({ to: step.to, data: step.data, value: step.value, gas: BRIDGE_GAS, ...DEFAULT_FEES }));
         const receipt = await phase(stage, `${name} (confirming)`, () => bridgeClient(from).waitForTransactionReceipt({ hash }));
