@@ -43,7 +43,9 @@ const STYLE_TONE = {
 const STYLE_EMOJI = { chill: "🧊", spicy: "🌶️", wild: "🔥" } as const;
 
 export function BuildTradeScreen() {
-  const { draft, patchDraft, available, blocker, maxLeverage } = useTrade();
+  const { draft, patchDraft, available, blocker, maxLeverage, openPositions } = useTrade();
+  /** Opening again on the side you already hold adds to that position, as on a futures exchange. */
+  const adding = openPositions.find((p) => p.position.marketId === draft.marketId && p.position.side === draft.side);
   const market = useMarket(draft.marketId);
   const style = styleOf(draft);
 
@@ -224,6 +226,11 @@ export function BuildTradeScreen() {
         </>
       )}
 
+      {adding && !blocker && (
+        <p className="text-center text-[12px] leading-snug text-white/75">
+          Adds to your open {draft.marketId.toUpperCase()} position: one average entry, and this trade&apos;s target and stop replace the old ones.
+        </p>
+      )}
       {blocker && <p className="text-center text-[13px] font-semibold text-coral">{blocker}</p>}
 
       <KeyHint action="place" />

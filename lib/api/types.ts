@@ -96,7 +96,8 @@ export type Trade = {
 /** POST /api/trades/:id/limits: the TP/SL the app just re-armed on chain. */
 export type LimitsRequest = { targetPct: number; stopPct: number };
 
-export type TradesResponse = { open: Trade | null; history: Trade[] };
+/** `opens` is every open trade, one per market, newest first. `open` is the newest of them, for apps that show a single trade. */
+export type TradesResponse = { open: Trade | null; opens: Trade[]; history: Trade[] };
 export type OpenTradeResponse = { trade: Trade; progress: ProgressView };
 export type CloseTradeResponse = { trade: Trade; progress: ProgressView };
 

@@ -75,7 +75,7 @@ export function HomeScreen() {
 
       <Card className="relative px-3 py-2">
         <p className="flex items-center text-[14px] text-white">
-          {mode === "chain" ? "dreamDEX balance" : "Practice balance"}
+          {mode === "chain" ? "Your balance" : "Practice balance"}
           <InfoTip text={mode === "chain" ? "Your collateral on dreamDEX testnet. It has no cash value." : "Practice funds have no cash value. Use them to learn without risk."} />
         </p>
         <p className="text-pop font-display text-[30px] leading-tight font-bold tabular-nums">{usd(balance)}</p>

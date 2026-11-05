@@ -67,7 +67,7 @@ const toClosed = (t: Trade): ClosedTrade => ({
 });
 
 /** TP/SL ids the app armed, per wallet, so they can be cancelled when the trade closes or its limits change. */
-const stopsKey = (address: string) => `bump:stops:${address.toLowerCase()}`;
+const stopsKey = (address: string, tradeId: string) => `bump:stops:${address.toLowerCase()}:${tradeId}`;
 /** An open fill the backend has not confirmed yet (network died after the order filled). Retried on the next load. */
 const unloggedKey = (address: string) => `bump:unlogged:${address.toLowerCase()}`;
 
@@ -110,35 +110,52 @@ export function ChainTradeProvider({ address, tradingAccount, children }: { addr
   const trades = useQuery({
     queryKey: qk.trades(address),
     queryFn: () => api<TradesResponse>("/api/trades"),
-    refetchInterval: (q) => (q.state.data?.open ? 5_000 : 30_000),
+    refetchInterval: (q) => (q.state.data?.opens?.length || q.state.data?.open ? 5_000 : 30_000),
   });
-  const open = trades.data?.open ?? null;
-  // With no trade of its own open, bump still shows what is open on the account: a position opened elsewhere (or whose
-  // record is gone) holds margin all the same, and the player has to be able to see it, close it and protect it.
+  // one position per market. A server that predates that sends only `open`.
+  const opens = useMemo(() => trades.data?.opens ?? (trades.data?.open ? [trades.data.open] : []), [trades.data]);
   const [focusPool, setFocusPool] = useState<string | null>(null);
-  const scanning = !open && trades.isSuccess && !!markets;
+  const poolOf = useCallback((marketId: string) => markets?.[marketId]?.poolAddress.toLowerCase(), [markets]);
+  // What is open on the account is read from the chain too: a position opened elsewhere (or whose record is gone) holds
+  // margin all the same, and the player has to be able to see it, close it and protect it.
+  const scanning = trades.isSuccess && !!markets;
   const chainPositions = useChainPositions(account, scanning);
-  const externals = useMemo<ExternalPosition[]>(
-    () =>
-      (chainPositions.data ?? [])
-        .filter((p): p is ChainPosition & { marketId: string } => !!p.marketId && !!markets?.[p.marketId])
-        .map((p) => {
-          const target = p.stops.find((s) => s.kind === "TP");
-          const stop = p.stops.find((s) => s.kind === "SL");
-          const pct = (s?: { trigger: number }) => (s && p.entry > 0 ? Math.abs(s.trigger / p.entry - 1) * 100 : 0);
-          return {
-            pool: p.pool,
-            marketId: p.marketId,
-            unprotected: p.stops.length === 0,
-            // the leverage the account actually runs this position at, so the stake and the profit on it read true
-            position: { id: `chain:${p.pool}`, marketId: p.marketId, side: p.side, entry: p.entry, margin: (p.size * p.entry) / p.leverage, leverage: p.leverage, targetPct: pct(target), stopPct: pct(stop), openedAt: Date.now() },
-          };
-        }),
-    [chainPositions.data, markets],
-  );
-  const external = !open ? (externals.find((e) => e.pool.toLowerCase() === focusPool?.toLowerCase()) ?? externals[0] ?? null) : null;
+  const externals = useMemo<ExternalPosition[]>(() => {
+    const tracked = new Set(opens.map((t) => poolOf(t.marketId)));
+    return (chainPositions.data ?? [])
+      .filter((p): p is ChainPosition & { marketId: string } => !!p.marketId && !!markets?.[p.marketId] && !tracked.has(p.pool.toLowerCase()))
+      .map((p) => {
+        const target = p.stops.find((s) => s.kind === "TP");
+        const stop = p.stops.find((s) => s.kind === "SL");
+        const pct = (s?: { trigger: number }) => (s && p.entry > 0 ? Math.abs(s.trigger / p.entry - 1) * 100 : 0);
+        return {
+          pool: p.pool,
+          marketId: p.marketId,
+          unprotected: p.stops.length === 0,
+          // the leverage the account actually runs this position at, so the stake and the profit on it read true
+          position: { id: `chain:${p.pool}`, marketId: p.marketId, side: p.side, entry: p.entry, margin: (p.size * p.entry) / p.leverage, leverage: p.leverage, targetPct: pct(target), stopPct: pct(stop), openedAt: Date.now() },
+        };
+      });
+  }, [chainPositions.data, markets, opens, poolOf]);
+  // The position screens show one at a time: the one the player picked, else the newest trade, else one opened elsewhere.
+  const focusedExternal = externals.find((e) => e.pool.toLowerCase() === focusPool?.toLowerCase()) ?? null;
+  const open = focusedExternal ? null : (opens.find((t) => poolOf(t.marketId) === focusPool?.toLowerCase()) ?? opens[0] ?? null);
+  const external = focusedExternal ?? (open ? null : (externals[0] ?? null));
   const position = useMemo(() => (open ? toPosition(open) : (external?.position ?? null)), [open, external]);
+  const openPositions = useMemo(
+    () => [
+      ...opens.flatMap((t) => {
+        const pool = markets?.[t.marketId]?.poolAddress;
+        return pool ? [{ pool, position: toPosition(t), external: false }] : [];
+      }),
+      ...externals.map((e) => ({ pool: e.pool, position: e.position, external: true })),
+    ],
+    [opens, externals, markets],
+  );
   const focusPosition = useCallback((pool: string) => setFocusPool(pool), []);
+  /** What the player holds in the market they are about to trade: adding on the same side is fine, the other side is not (that is a close). */
+  const heldHere = openPositions.find((p) => p.position.marketId === draft.marketId) ?? null;
+  const againstHeld = !!heldHere && heldHere.position.side !== draft.side;
   const history = useMemo(() => (trades.data?.history ?? []).map(toClosed), [trades.data?.history]);
 
   /** The perps collateral (USDso) is the market row's quote token, not the SDK address set's `collateral` entry. */
@@ -185,7 +202,7 @@ export function ChainTradeProvider({ address, tradingAccount, children }: { addr
   const balance = scale && equity.data ? round2(usdOf(equity.data.total, scale)) : 0;
   const available = scale && equity.data ? round2(Math.max(0, usdOf(equity.data.free, scale))) : 0;
   // margin held by an open position is not "out of coins": the blocker says to close it instead
-  const broke = !position && !!equity.data && available < MIN_STAKE && (equity.data.pools ?? 0) === 0;
+  const broke = !!equity.data && available < MIN_STAKE && (equity.data.pools ?? 0) === 0;
 
   // the market's own cap, held lower for an account living on a voucher (its cap replaces the market's)
   const leverage = useQuery({
@@ -211,7 +228,7 @@ export function ChainTradeProvider({ address, tradingAccount, children }: { addr
   const priceBucket = Number(live.price.toPrecision(3));
   const check = useQuery({
     queryKey: ["bump", "chain", "check", account, draft.marketId, draft.side, draft.margin, draft.leverage, priceBucket],
-    enabled: !!row && !position && live.priceStatus === "live" && maxLeverage >= draft.leverage && draft.margin >= MIN_STAKE,
+    enabled: !!row && !againstHeld && live.priceStatus === "live" && maxLeverage >= draft.leverage && draft.margin >= MIN_STAKE,
     staleTime: 4_000,
     queryFn: async (): Promise<{ error: string | null }> => {
       const r = row as NonNullable<typeof row>;
@@ -229,10 +246,10 @@ export function ChainTradeProvider({ address, tradingAccount, children }: { addr
     },
   });
 
-  const blocker = position
-    ? "Close your trade first."
+  const blocker = againstHeld
+    ? `You hold a ${draft.marketId.toUpperCase()} ${heldHere?.position.side === "long" ? "BUY" : "SELL"} trade. Close it before you ${draft.side === "long" ? "BUY" : "SELL"}.`
     : (equity.data?.pools ?? 0) > 0 && available < MIN_STAKE
-      ? "An open position or order already uses your margin. Close it in Positions first."
+      ? "Your open positions use up your margin. Close one in Positions first."
       : trades.isError && !trades.data
       ? "Can't reach bump right now. Try again in a moment."
       : !markets
@@ -312,7 +329,7 @@ export function ChainTradeProvider({ address, tradingAccount, children }: { addr
     async (trader: Awaited<ReturnType<typeof signer>>, r: NonNullable<typeof row>, t: Pick<Trade, "id" | "side" | "entry">, targetPct: number, stopPct: number) => {
       const result = await trader.placePerpStopOrder(limitsToStops(t.side, t.entry, targetPct, stopPct, r));
       const ids = [result.stopOrderId, result.pairedStopOrderId].filter((id): id is bigint => id !== undefined).map(String);
-      writeJson(stopsKey(address), { tradeId: t.id, ids });
+      writeJson(stopsKey(address, t.id), { tradeId: t.id, ids });
       return ids;
     },
     [address],
@@ -320,9 +337,9 @@ export function ChainTradeProvider({ address, tradingAccount, children }: { addr
 
   /** Cancels the trade's pending stops (refunding their STT). Best effort: a stop that already fired is gone. */
   const cancelStops = useCallback(
-    async (trader: Awaited<ReturnType<typeof signer>>, r: NonNullable<typeof row>) => {
+    async (trader: Awaited<ReturnType<typeof signer>>, r: NonNullable<typeof row>, tradeId: string) => {
       if (!r.stopRegistry) return;
-      const stored = readJson<{ ids: string[] }>(stopsKey(address))?.ids ?? [];
+      const stored = readJson<{ ids: string[] }>(stopsKey(address, tradeId))?.ids ?? [];
       let listed: string[] = [];
       try {
         listed = (await exchange().client.listPerpStopOrders({ account, pool: r.poolAddress, status: ["PENDING"] })).map((s) => s.orderIdRaw);
@@ -336,7 +353,7 @@ export function ChainTradeProvider({ address, tradingAccount, children }: { addr
       } catch {
         // already triggered or cancelled
       }
-      writeJson(stopsKey(address), null);
+      writeJson(stopsKey(address, tradeId), null);
     },
     [address, account],
   );
@@ -381,13 +398,19 @@ export function ChainTradeProvider({ address, tradingAccount, children }: { addr
         step("open", { step: "stops" });
         let warning: string | null = null;
         try {
+          if (heldHere) await cancelStops(trader, row, logged.trade.id);
           await armStops(trader, row, logged.trade, draft.targetPct, draft.stopPct);
         } catch (error) {
           warning = `Your trade is open, but TP/SL couldn't be set (${shortError(error)}). Edit limits to try again.`;
         }
         step("open", { step: "done", warning });
         sfx.open();
-        queryClient.setQueryData<TradesResponse>(qk.trades(address), (prev) => ({ open: logged.trade, history: prev?.history ?? [] }));
+        queryClient.setQueryData<TradesResponse>(qk.trades(address), (prev) => ({
+          open: logged.trade,
+          opens: [logged.trade, ...(prev?.opens ?? []).filter((t) => t.id !== logged.trade.id)],
+          history: prev?.history ?? [],
+        }));
+        setFocusPool(row.poolAddress);
         void refresh();
         return true;
       } catch (error) {
@@ -397,7 +420,7 @@ export function ChainTradeProvider({ address, tradingAccount, children }: { addr
         busy.current = false;
       }
     },
-    [blocker, row, draft, signer, heldCollateral, markOf, armStops, address, queryClient, refresh, step],
+    [blocker, row, draft, heldHere, signer, heldCollateral, markOf, armStops, cancelStops, address, queryClient, refresh, step],
   );
 
   /** Cancels the pending stops on one pool (refunding their STT), by the chain's own list rather than this device's memory. */
@@ -519,7 +542,7 @@ export function ChainTradeProvider({ address, tradingAccount, children }: { addr
 
         const logged = await withRetry(() => api<CloseTradeResponse>(`/api/trades/${t.id}/close`, { body: { txHash: placed.hash } }));
         const done = logged.trade.closedAt !== null;
-        if (done) await cancelStops(trader, r);
+        if (done) await cancelStops(trader, r, t.id);
         const closed: ClosedTrade = {
           id: done ? logged.trade.id : `${logged.trade.id}:${placed.hash.slice(2, 10)}`,
           marketId: t.marketId,
@@ -535,10 +558,11 @@ export function ChainTradeProvider({ address, tradingAccount, children }: { addr
         sfx.close(closed.pnl);
         setReceipt(closed);
         step("close", { step: "done" });
-        queryClient.setQueryData<TradesResponse>(qk.trades(address), (prev) => ({
-          open: done ? null : logged.trade,
-          history: done ? [logged.trade, ...(prev?.history ?? [])] : (prev?.history ?? []),
-        }));
+        queryClient.setQueryData<TradesResponse>(qk.trades(address), (prev) => {
+          const rest = (prev?.opens ?? []).filter((x) => x.id !== t.id);
+          const opensNow = done ? rest : [logged.trade, ...rest];
+          return { open: opensNow[0] ?? null, opens: opensNow, history: done ? [logged.trade, ...(prev?.history ?? [])] : (prev?.history ?? []) };
+        });
         void refresh();
         return closed;
       } catch (error) {
@@ -565,7 +589,7 @@ export function ChainTradeProvider({ address, tradingAccount, children }: { addr
       setPending({ kind: "limits", step: "stops", txHash: null, error: null, warning: null });
       try {
         const trader = await signer();
-        await cancelStops(trader, r);
+        await cancelStops(trader, r, t.id);
         try {
           await armStops(trader, r, t, limits.targetPct, limits.stopPct);
         } catch (error) {
@@ -705,7 +729,7 @@ export function ChainTradeProvider({ address, tradingAccount, children }: { addr
     return () => clearInterval(id);
   }, [address]);
   useEffect(() => {
-    if (!trades.isSuccess || trades.data.open) return;
+    if (!trades.isSuccess) return;
     const lost = readJson<{ txHash: string; draft: Draft }>(unloggedKey(address));
     if (!lost) return;
     void api<OpenTradeResponse>("/api/trades", { body: { ...lost.draft, txHash: lost.txHash } })
@@ -716,7 +740,7 @@ export function ChainTradeProvider({ address, tradingAccount, children }: { addr
       .catch((error) => {
         if (isFinalRejection(error)) writeJson(unloggedKey(address), null);
       });
-  }, [trades.isSuccess, trades.data?.open, address, refresh, logRetry]);
+  }, [trades.isSuccess, address, refresh, logRetry]);
 
   // a closed trade's receipt is only needed until the history carries it
   const lastClosed = receipt && receipt.closedAt >= (history[0]?.closedAt ?? 0) ? receipt : (history[0] ?? null);
@@ -727,7 +751,7 @@ export function ChainTradeProvider({ address, tradingAccount, children }: { addr
       draft,
       position,
       history,
-      ready: !trades.isPending && !(scanning && chainPositions.isPending),
+      ready: !trades.isPending && !(opens.length === 0 && scanning && chainPositions.isPending),
       balance,
       available,
       broke,
@@ -743,13 +767,14 @@ export function ChainTradeProvider({ address, tradingAccount, children }: { addr
       withdraw,
       moveToAccount: tradingAccount ? moveToAccount : null,
       external: external ? { unprotected: external.unprotected } : null,
+      openPositions,
       focusPosition,
       updateLimits,
       closePosition,
       previewClose,
       dismissPending,
     }),
-    [draft, position, history, trades.isPending, balance, available, broke, blocker, maxLeverage, lastClosed, pending, setup, patchDraft, openPosition, refill, withdraw, moveToAccount, tradingAccount, external, focusPosition, updateLimits, closePosition, previewClose, dismissPending],
+    [draft, position, history, trades.isPending, balance, available, broke, blocker, maxLeverage, lastClosed, pending, setup, patchDraft, openPosition, refill, withdraw, moveToAccount, tradingAccount, external, openPositions, focusPosition, updateLimits, closePosition, previewClose, dismissPending],
   );
 
   return <TradeContext.Provider value={value}>{children}</TradeContext.Provider>;

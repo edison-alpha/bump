@@ -3,7 +3,6 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { formatUnits, type Address } from "viem";
-import { useConsole } from "@/components/console/console-provider";
 import { Screen } from "@/components/shell/screen";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -23,10 +22,7 @@ const qty = (value: number) => value.toLocaleString("en-US", { maximumFractionDi
  */
 export function PositionsScreen() {
   const queryClient = useQueryClient();
-  const { setup, position, mode, external, focusPosition } = useTrade();
-  const { flash } = useConsole();
-  /** A trade bump has its own record of: it takes the position screens, so another position has to wait for it. */
-  const ownTrade = !!position && !external;
+  const { setup, mode, focusPosition } = useTrade();
   const account = setup?.account as Address | undefined;
 
   const positions = useChainPositions(account, mode === "chain");
@@ -106,21 +102,13 @@ export function PositionsScreen() {
       )}
 
       {shown.map((r) => {
-        const open = !ownTrade || (!!r.marketId && position?.marketId === r.marketId);
         return (
           <Link
             key={r.pool}
             href="/position"
             aria-label={`Open your ${r.symbol} position`}
-            onClick={(event) => {
-              if (!open) {
-                event.preventDefault();
-                flash("Close your current trade first, then open this one.", "warn");
-                return;
-              }
-              // the position screens show this one (a no-op when it is the trade bump already tracks)
-              focusPosition?.(r.pool);
-            }}
+            // the position screens show this one
+            onClick={() => focusPosition?.(r.pool)}
           >
             <Card className="flex flex-col gap-1.5 px-3 py-2">
               <div className="flex items-center gap-2.5">

@@ -77,7 +77,9 @@ export type TradeContextValue = {
   moveToAccount: ((amount: string) => Promise<void>) | null;
     /** Chain: set while the open position is one on dreamDEX that bump has no trade record for (opened elsewhere): it can be closed and given a TP/SL, nothing more. */
   external: { unprotected: boolean } | null;
-  /** Chain: makes an on-chain position (by pool address) the one the position screens show, when bump has no trade of its own open. */
+  /** Chain: every position open on the account, the ones bump tracks and the ones opened elsewhere. */
+  openPositions: { pool: string; position: Position; external: boolean }[];
+  /** Chain: makes an on-chain position (by pool address) the one the position screens show. */
   focusPosition: ((pool: string) => void) | null;
   updateLimits: (limits: Pick<Position, "targetPct" | "stopPct">) => Promise<boolean>;
   /** Closes `percent` (1-100) of the open position at about `exit`, resolves the receipt. */

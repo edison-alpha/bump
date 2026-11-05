@@ -22,18 +22,18 @@ import { SideChip } from "../components/trade-header";
 import { useTrade } from "../trade-provider";
 import type { Position, Side } from "../types";
 
-/** The trade that is open, pinned above the pair list: coin, side and how it stands right now. Tap to open it. */
-function OpenPositionCard({ position }: { position: Position }) {
+/** A position that is open, pinned above the pair list: coin, side and how it stands right now. Tap to open it. */
+function OpenPositionCard({ position, onOpen }: { position: Position; onOpen: () => void }) {
   const market = useMarket(position.marketId);
   const pnl = unrealizedPnl(position, position.entry, market.price);
   return (
-    <Link href="/position" aria-label={`Open your ${market.name} trade`}>
+    <Link href="/position" onClick={onOpen} aria-label={`Open your ${market.name} position`}>
       <Card className="flex items-center gap-2.5 px-3 py-2">
         <CoinIcon symbol={market.symbol} size={36} />
         <div className="min-w-0 flex-1">
-          <p className="flex items-center gap-1.5 font-display text-[11px] font-bold tracking-[0.1em] text-white/70">YOUR OPEN TRADE</p>
+          <p className="flex items-center gap-1.5 font-display text-[11px] font-bold tracking-[0.1em] text-white/70">YOUR POSITION</p>
           <p className="flex items-center gap-1.5 font-display text-[16px] leading-tight font-bold">
-            {market.name} <SideChip side={position.side} /> <span className="text-[13px] text-white/75">{position.leverage}x</span>
+            {market.name} <SideChip side={position.side} /> <span className="text-[13px] text-white/75">{Number(position.leverage.toFixed(1))}x</span>
           </p>
         </div>
         <span className={cn("font-display text-[18px] font-bold tabular-nums", pnl >= 0 ? "text-mint" : "text-coral")}>{signedUsd(pnl)}</span>
@@ -46,13 +46,14 @@ function OpenPositionCard({ position }: { position: Position }) {
 export function PickMarketScreen() {
   const router = useRouter();
   const markets = useMarkets();
-  const { draft, patchDraft, position } = useTrade();
+  const { draft, patchDraft, openPositions, focusPosition } = useTrade();
   const { flash } = useConsole();
   const { tutorialActive } = useProgress();
 
   const choose = (side: Side) => {
-    // one trade at a time: the list is for looking around while it runs
-    if (position) return flash("Close your current trade first, then pick a direction.", "warn");
+    // adding on the side you hold is fine; the other side would be a close
+    const held = openPositions.find((p) => p.position.marketId === draft.marketId);
+    if (held && held.position.side !== side) return flash(`You hold a ${held.position.side === "long" ? "BUY" : "SELL"} here. Close it before you ${side === "long" ? "BUY" : "SELL"}.`, "warn");
     patchDraft({ side });
     router.push("/trade/build");
   };
@@ -70,7 +71,9 @@ export function PickMarketScreen() {
 
   return (
     <Screen title="Pick a coin" className="[&>*]:shrink-0">
-      {position && <OpenPositionCard position={position} />}
+      {openPositions.map((p) => (
+        <OpenPositionCard key={p.pool} position={p.position} onOpen={() => focusPosition?.(p.pool)} />
+      ))}
       <PriceNotice market={selected} />
       <Coach step={1} points="sides">
         Think {selected.name} goes up? Press <KeyName tone="buy">BUY</KeyName>. Down? Press <KeyName tone="sell">SELL</KeyName>.

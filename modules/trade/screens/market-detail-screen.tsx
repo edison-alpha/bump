@@ -38,7 +38,7 @@ const POINTS = 60;
 /** One market in full: price, a chart you can zoom, and the exchange's own limits for it. */
 export function MarketDetailScreen({ marketId }: { marketId: string }) {
   const router = useRouter();
-  const { patchDraft, position } = useTrade();
+  const { patchDraft, openPositions } = useTrade();
   const { flash } = useConsole();
   const market = useMarket(marketId);
   const { data: rows } = useChainMarkets();
@@ -54,7 +54,9 @@ export function MarketDetailScreen({ marketId }: { marketId: string }) {
 
   const choose = (side: Side) => {
     // the keys are the only way to pick a direction, so they say why when they cannot
-    if (position) return flash("Close your current trade first, then pick a direction.", "warn");
+    // adding on the side you hold is fine; the other side would be a close
+    const held = openPositions.find((p) => p.position.marketId === market.id);
+    if (held && held.position.side !== side) return flash(`You hold a ${held.position.side === "long" ? "BUY" : "SELL"} here. Close it before you ${side === "long" ? "BUY" : "SELL"}.`, "warn");
     if (market.priceStatus !== "live") return flash("Waiting for a live dreamDEX price.", "warn");
     patchDraft({ marketId: market.id, side });
     router.push("/trade/build");

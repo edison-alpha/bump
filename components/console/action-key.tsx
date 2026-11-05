@@ -32,7 +32,10 @@ export function ActionKey() {
   const market = useMarket(position?.marketId ?? "btc");
   const { action, flash, coachKey } = useConsole();
   const signedIn = session.status !== "signed-out";
-  const mode = position ? "close" : "open";
+  // Closing belongs to the position screens. Everywhere else the key opens a trade, so a player who holds a position
+  // can add to it or open another market.
+  const onPositionScreen = pathname === "/position" || pathname.startsWith("/position/");
+  const mode = position && onPositionScreen ? "close" : "open";
   const placing = pathname === "/trade/progress";
   const holdable = signedIn && !placing && (mode === "close" || PLACE_FROM.includes(pathname));
 
